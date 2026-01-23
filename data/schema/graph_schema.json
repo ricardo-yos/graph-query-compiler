@@ -1,0 +1,122 @@
+{
+    "nodes": {
+        "Place": {
+            "properties": [
+                "latitude",
+                "longitude",
+                "name",
+                "num_reviews",
+                "place_id",
+                "rating",
+                "type"
+            ]
+        },
+        "Neighborhood": {
+            "properties": [
+                "area_km2",
+                "average_monthly_income",
+                "centroid_lat",
+                "centroid_lon",
+                "literacy_rate",
+                "name",
+                "neighborhood_id",
+                "population_with_income",
+                "total_literate_population",
+                "total_private_households",
+                "total_resident_population"
+            ]
+        },
+        "Road": {
+            "properties": [
+                "highway",
+                "length",
+                "maxspeed",
+                "name",
+                "oneway",
+                "osmid",
+                "road_id",
+                "u",
+                "v"
+            ]
+        },
+        "Intersection": {
+            "properties": [
+                "highway",
+                "lat",
+                "lon",
+                "osmid",
+                "street_count"
+            ]
+        },
+        "Review": {
+            "properties": [
+                "author",
+                "date",
+                "place_id",
+                "place_name",
+                "rating",
+                "review_id",
+                "text"
+            ]
+        }
+    },
+    "relationships": {
+        "CONTAINS": {
+            "properties": [
+                "source"
+            ]
+        },
+        "ROAD": {
+            "properties": [
+                "length",
+                "maxspeed",
+                "name",
+                "oneway",
+                "road_id"
+            ]
+        },
+        "NEAR": {
+            "properties": [
+                "distance_m",
+                "source"
+            ]
+        },
+        "HAS_REVIEW": {
+            "properties": [
+                "source"
+            ]
+        }
+    },
+    "allowed_patterns": [
+        {
+            "start": "Neighborhood",
+            "relationship": "CONTAINS",
+            "end": "Place"
+        },
+        {
+            "start": "Neighborhood",
+            "relationship": "CONTAINS",
+            "end": "Road"
+        },
+        {
+            "start": "Place",
+            "relationship": "NEAR",
+            "end": "Intersection"
+        },
+        {
+            "start": "Place",
+            "relationship": "HAS_REVIEW",
+            "end": "Review"
+        },
+        {
+            "start": "Intersection",
+            "relationship": "ROAD",
+            "end": "Intersection"
+        },
+        {
+            "start": "Road",
+            "relationship": "CONTAINS",
+            "end": "Place"
+        }
+    ]
+}
