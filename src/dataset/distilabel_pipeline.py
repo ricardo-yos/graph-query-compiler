@@ -1,13 +1,13 @@
 """
 Question Dataset Generation Pipeline
-===================================
+====================================
 
 Deterministic pipeline for generating natural language questions
 (Brazilian Portuguese) from structured graph query intents.
 
-This module transforms validated and cleaned intents into realistic,
-human-like questions that a user would naturally ask when interacting
-with a graph-backed system.
+This module transforms validated and quality-filtered intents into
+natural, human-like questions that a user would realistically ask
+when interacting with a graph-backed system.
 
 Each generated example contains:
 - A single natural language question (pt-BR)
@@ -20,22 +20,23 @@ This dataset is designed for:
 
 Important Characteristics
 -------------------------
-- Generates ONLY questions (no answers, no Cypher, no instructions)
-- Preserves the original intent schema for traceability
-- Uses deterministic prompting rules to ensure consistency
+- Generates ONLY questions (no answers, no Cypher, no explanations)
+- Preserves the original intent schema for full traceability
+- Uses deterministic, rule-based prompting for consistency
 - Avoids hallucination by strictly using intent-provided information
 - Optimized for graph query understanding in real-world scenarios
 
 Input
 -----
-- JSONL file containing validated and quality-filtered intents
+- JSONL file containing semantically validated and quality-filtered intents
 
 Output
 ------
 - JSONL dataset where each line contains:
   {
       "question": "<natural language question>",
-      "schema": <structured intent>
+      "user_intent": "<intent type>",
+      "schema": <structured intent subset>
   }
 
 Language
@@ -44,10 +45,10 @@ Language
 
 Notes
 -----
-- This pipeline assumes intents are already semantically validated
-  and quality-scored upstream.
-- Generated questions are intended to sound natural, concise,
-  and conversational, avoiding technical or schema-specific language.
+- This pipeline assumes all intents are already valid and cleaned.
+- No semantic validation or quality scoring is performed here.
+- Generated questions are concise, natural, and conversational,
+  avoiding any schema- or database-specific terminology.
 """
 
 import json
@@ -209,12 +210,15 @@ def intent_to_text(intent: dict) -> str:
 class IntentToInstruction(Step):
     """
     Convert a structured graph intent into a SYSTEM instruction
-    that prompts the LLM to generate a natural language question.
+    that prompts an LLM to generate a single natural language question.
 
-    This step enforces:
-    - Language constraints (pt-BR)
-    - Style constraints (natural, conversational)
-    - Semantic faithfulness to the intent
+    This step does NOT generate the question itself.
+    It only produces a controlled instruction that enforces:
+
+    - Language constraints (Brazilian Portuguese)
+    - Conversational and natural phrasing
+    - Strict semantic faithfulness to the intent
+    - No inference or hallucination beyond provided schema
     """
 
     outputs: ClassVar[list[str]] = ["instruction"]
@@ -263,11 +267,14 @@ class IntentToInstruction(Step):
 
 class SelectQuestionSchema(Step):
     """
-    Extract the generated natural language question and
-    preserve the original intent schema.
+    Select and normalize the final dataset example by extracting
+    the generated natural language question and attaching the
+    corresponding structured intent schema.
 
-    This ensures traceability between:
-    question ↔ structured graph intent
+    This step ensures a clean and explicit mapping between:
+    - Natural language question
+    - User intent type
+    - Minimal schema representation required for supervision
     """
 
     outputs: ClassVar[list[str]] = ["question", "user_intent", "schema"]
@@ -307,6 +314,12 @@ class SelectQuestionSchema(Step):
 def main() -> None:
     """
     Execute the full question dataset generation pipeline.
+
+    This function:
+    - Loads cleaned intents from disk
+    - Processes them in small batches to control LLM usage
+    - Generates one natural language question per intent
+    - Persists the final question + schema dataset as JSONL
     """
 
     intents_path = os.path.join(CLEANED_INTENTS_DIR, "intents_clean.jsonl")
