@@ -1,0 +1,80 @@
+# ==============================================
+# Model Configuration
+# ==============================================
+base_model: meta-llama/Llama-2-7b-hf
+tokenizer_type: meta-llama/Llama-2-7b-hf
+
+sequence_len: 512
+stop_token: "</json>"
+
+# ==============================================
+# Dataset
+# ==============================================
+dataset:
+  name: local_jsonl
+  cache_dir: data/datasets/cache
+
+  data_files:
+    train: data/datasets/augmented/train_augmented.jsonl
+    validation: data/datasets/splits/val_base.jsonl
+
+  type: completion
+  seed: 42
+
+# ==============================================
+# Prompt Instruction
+# ==============================================
+task_instruction: >
+  Given a natural language question, predict the user's intent and return a JSON query schema.
+  The JSON structure MUST be exactly as specified.
+  Include both "user_intent" and "schema" in the output.
+  Return ONLY valid JSON. Do not explain.
+
+# ==============================================
+# Quantization (QLoRA)
+# ==============================================
+load_in_4bit: true
+bnb_4bit_quant_type: nf4
+bnb_4bit_use_double_quant: true
+bnb_4bit_compute_dtype: float16
+
+# ==============================================
+# LoRA Configuration
+# ==============================================
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_bias: none
+
+target_modules:
+  - q_proj
+  - v_proj
+
+# ==============================================
+# Training Configuration
+# ==============================================
+num_epochs: 3
+learning_rate: 0.0002
+
+batch_size: 1
+gradient_accumulation_steps: 16
+eval_batch_size: 1
+
+lr_scheduler: constant
+warmup_steps: 0
+
+fp16: true
+bf16: false
+
+logging_steps: 10
+eval_steps: 50
+save_steps: 50
+save_total_limit: 2
+
+optim: paged_adamw_8bit
+max_steps: -1
+
+# ==============================================
+# Output
+# ==============================================
+output_dir: models/qlora-intent-model
