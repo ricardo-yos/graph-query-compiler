@@ -1,0 +1,31 @@
+# ==============================================
+# Model
+# ==============================================
+
+base_model: meta-llama/Llama-2-7b-hf
+adapter_dir: models/qlora-intent-model
+
+max_new_tokens: 256
+
+stop_token: "</json>"
+answer_marker: "### Answer:\n"
+
+# ==============================================
+# Prompt
+# ==============================================
+
+task_instruction: >
+  Given a natural language question, predict the user's intent and return
+  a JSON query schema. The JSON structure MUST be exactly as specified.
+  Include both "user_intent" and "schema" in the output.
+  Return ONLY valid JSON.
+
+# ==============================================
+# Quantization
+# ==============================================
+
+quantization:
+  load_in_4bit: true
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+  bnb_4bit_compute_dtype: float16
