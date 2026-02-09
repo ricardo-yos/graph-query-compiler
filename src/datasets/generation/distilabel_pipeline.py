@@ -54,6 +54,7 @@ Notes
 import json
 import os
 import time
+import yaml
 from typing import Any, Dict, List, ClassVar
 
 from distilabel.pipeline import Pipeline
@@ -62,7 +63,7 @@ from distilabel.steps import StepInput, StepOutput
 from distilabel.steps.tasks import TextGeneration
 from distilabel.models.llms import GroqLLM
 
-from config.paths import CLEANED_INTENTS_DIR, BASE_DATASETS_DIR
+from config.paths import CLEANED_INTENTS_DIR, BASE_DATASETS_DIR, CONFIG_DIR
 from config.env_loader import load_env
 
 
@@ -76,6 +77,29 @@ load_env()
 
 
 # ============================================================
+# Configuration
+# ============================================================
+# Centralized experiment configuration loading.
+# This allows full control over dataset generation parameters,
+# enabling reproducibility, auditing, and systematic experimentation.
+
+CONFIG_PATH = os.path.join(
+    CONFIG_DIR, "dataset_generation", "generation.yaml"
+)
+
+with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+    cfg: Dict[str, Any] = yaml.safe_load(f)
+
+MODEL_NAME = cfg["generation"]["model"]
+TEMPERATURE = cfg["generation"]["temperature"]
+BATCH_SIZE = cfg["generation"]["batch_size"]
+SLEEP_SECONDS = cfg["generation"]["sleep_seconds"]
+
+INTENTS_FILE = cfg["input"]["intents_file"]
+OUTPUT_FILE = cfg["output"]["dataset_file"]
+
+
+# ============================================================
 # Utility functions
 # ============================================================
 
@@ -83,15 +107,18 @@ def load_intents(path: str) -> List[Dict[str, Any]]:
     """
     Load structured intents from a JSONL file.
 
+    Each line of the input file must contain a single JSON object
+    representing a validated intent schema.
+
     Parameters
     ----------
     path : str
-        Path to the JSONL file containing cleaned intents.
+        Path to the JSONL file containing cleaned and validated intents.
 
     Returns
     -------
     List[Dict[str, Any]]
-        List of intent dictionaries.
+        List of intent dictionaries ready for processing.
     """
     with open(path, "r", encoding="utf-8") as f:
         return [json.loads(line) for line in f]
@@ -101,12 +128,15 @@ def chunk_list(lst: List[Any], chunk_size: int) -> List[List[Any]]:
     """
     Split a list into fixed-size batches.
 
-    This is used to control LLM request size and
-    avoid rate limits or memory issues.
+    This function is used to:
+    - Control LLM request payload size
+    - Reduce GPU memory pressure
+    - Avoid API rate limits
+    - Improve stability during long-running generation jobs
 
     Parameters
     ----------
-    lst : list
+    lst : List[Any]
         Input list to be chunked.
     chunk_size : int
         Maximum number of elements per chunk.
@@ -114,17 +144,24 @@ def chunk_list(lst: List[Any], chunk_size: int) -> List[List[Any]]:
     Returns
     -------
     List[List[Any]]
-        List of chunks.
+        List of chunks with at most `chunk_size` elements each.
     """
     return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
 
 
 def safe_value(obj: Dict[str, Any]) -> str:
     """
-    Extract an explicitly defined value from a constraint object.
+    Safely extract a constraint value from a schema object.
 
-    Supports multiple value types and legacy schemas.
-    Falls back to a generic placeholder only if no value is provided.
+    This function supports multiple schema formats and legacy
+    representations, providing a robust fallback strategy when
+    explicit values are missing.
+
+    Supported value fields:
+    - value_str
+    - value_int
+    - value_float
+    - value (legacy schemas)
 
     Parameters
     ----------
@@ -134,7 +171,8 @@ def safe_value(obj: Dict[str, Any]) -> str:
     Returns
     -------
     str
-        String representation of the constraint value.
+        String representation of the extracted value, or a placeholder
+        token when no explicit value is provided.
     """
     if obj.get("value_str") is not None:
         return str(obj["value_str"])
@@ -149,11 +187,13 @@ def safe_value(obj: Dict[str, Any]) -> str:
 
 def intent_to_text(intent: dict) -> str:
     """
-    Convert a structured graph intent into a textual
-    description suitable for LLM prompting.
+    Convert a structured graph intent into a controlled textual
+    representation suitable for LLM prompting.
 
-    This representation is NOT shown to the final user.
-    It exists only to guide controlled question generation.
+    This intermediate textual form:
+    - Is NOT exposed to the final user
+    - Serves exclusively as semantic guidance for the LLM
+    - Enforces controlled, faithful question generation
 
     Parameters
     ----------
@@ -163,7 +203,7 @@ def intent_to_text(intent: dict) -> str:
     Returns
     -------
     str
-        Textual description of the intent.
+        Textual description of the intent, optimized for prompt construction.
     """
     parts = [f"User intent: {intent.get('user_intent', 'unknown')}"]
 
@@ -209,16 +249,22 @@ def intent_to_text(intent: dict) -> str:
 
 class IntentToInstruction(Step):
     """
-    Convert a structured graph intent into a SYSTEM instruction
-    that prompts an LLM to generate a single natural language question.
+    Transform a structured graph intent into a SYSTEM-level instruction
+    for controlled natural language question generation.
 
-    This step does NOT generate the question itself.
-    It only produces a controlled instruction that enforces:
+    This step:
+    - Builds a deterministic prompt template
+    - Enforces strict linguistic and semantic constraints
+    - Prevents hallucination and uncontrolled inference
 
-    - Language constraints (Brazilian Portuguese)
-    - Conversational and natural phrasing
-    - Strict semantic faithfulness to the intent
-    - No inference or hallucination beyond provided schema
+    It does NOT generate the final question.
+    It only prepares the instruction consumed by the LLM.
+
+    Enforced constraints:
+    - Brazilian Portuguese (pt-BR)
+    - Natural and conversational tone
+    - Semantic faithfulness to the input schema
+    - No schema, database, or implementation details in the output
     """
 
     outputs: ClassVar[list[str]] = ["instruction"]
@@ -267,17 +313,21 @@ class IntentToInstruction(Step):
 
 class SelectQuestionSchema(Step):
     """
-    Select and normalize the final dataset example by extracting
-    the generated natural language question and attaching the
-    corresponding structured intent schema.
+    Extract and normalize the final dataset sample.
 
-    This step ensures a clean and explicit mapping between:
-    - Natural language question
-    - User intent type
-    - Minimal schema representation required for supervision
+    This step builds the supervised learning example by pairing:
+    - The generated natural language question
+    - The corresponding user intent
+    - A minimal and normalized schema representation
+
+    This guarantees:
+    - Clean supervision signals
+    - Explicit semantic alignment
+    - Traceability between natural language and structure
     """
 
     outputs: ClassVar[list[str]] = ["question", "user_intent", "schema"]
+
 
     def process(self, items: StepInput) -> StepOutput:
         results = []
@@ -315,17 +365,20 @@ def main() -> None:
     """
     Execute the full question dataset generation pipeline.
 
-    This function:
-    - Loads cleaned intents from disk
-    - Processes them in small batches to control LLM usage
-    - Generates one natural language question per intent
-    - Persists the final question + schema dataset as JSONL
+    This function orchestrates the full workflow:
+    - Loads validated intents from disk
+    - Processes them in small batches
+    - Generates exactly one natural language question per intent
+    - Persists the final dataset in JSONL format
+
+    The batching strategy is designed to:
+    - Control latency and memory usage
+    - Avoid API rate limits
+    - Improve long-run pipeline stability
     """
 
-    intents_path = os.path.join(CLEANED_INTENTS_DIR, "intents_clean.jsonl")
-    output_path = os.path.join(BASE_DATASETS_DIR, "questions_base.jsonl")
-
-    batch_size = 2
+    intents_path = os.path.join(CLEANED_INTENTS_DIR, INTENTS_FILE)
+    output_path = os.path.join(BASE_DATASETS_DIR, OUTPUT_FILE)
 
     intents = load_intents(intents_path)
     print(f"Loaded {len(intents)} intents")
@@ -334,7 +387,7 @@ def main() -> None:
 
     # Process intents in small batches to control
     # LLM latency, cost and rate limits
-    for batch_idx, batch in enumerate(chunk_list(intents, batch_size)):
+    for batch_idx, batch in enumerate(chunk_list(intents, BATCH_SIZE)):
         print(f"\nProcessing batch {batch_idx + 1}")
 
         with Pipeline(name=f"question-batch-{batch_idx}") as pipeline:
@@ -351,8 +404,8 @@ def main() -> None:
             generation_step = TextGeneration(
                 name="generate_question",
                 llm=GroqLLM(
-                    model="llama-3.1-8b-instant",
-                    generation_kwargs={"temperature": 0.3},
+                    model=MODEL_NAME,
+                    generation_kwargs={"temperature": TEMPERATURE},
                 ),
                 columns=["instruction"],
                 output_mappings={"generation": "qa_pair"},
@@ -369,7 +422,7 @@ def main() -> None:
         all_outputs.extend(dataset["default"]["train"].to_list())
 
         # Small pause to reduce API pressure
-        time.sleep(2)
+        time.sleep(SLEEP_SECONDS)
 
     # --------------------------------------------------
     # Persist final dataset
