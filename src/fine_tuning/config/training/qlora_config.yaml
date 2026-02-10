@@ -1,8 +1,8 @@
 # ==============================================
 # Model Configuration
 # ==============================================
-base_model: meta-llama/Llama-2-7b-hf
-tokenizer_type: meta-llama/Llama-2-7b-hf
+base_model: mistralai/Mistral-7B-Instruct-v0.2
+tokenizer_type: mistralai/Mistral-7B-Instruct-v0.2
 
 sequence_len: 512
 stop_token: "</json>"
