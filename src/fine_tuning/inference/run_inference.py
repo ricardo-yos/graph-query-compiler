@@ -2,11 +2,12 @@
 QLoRA Inference Pipeline for Structured Graph Reasoning
 =======================================================
 
-This module implements a **QLoRA-based inference pipeline** for generating
-structured JSON outputs from natural language questions.
+This module implements a **QLoRA-based inference pipeline** for converting
+natural language questions into structured JSON outputs suitable for
+graph query execution and reasoning.
 
 The model is trained to:
-- Read a natural language question
+- Interpret a natural language question
 - Infer the user's intent
 - Produce a strictly valid JSON output containing:
   - `user_intent`
@@ -14,16 +15,24 @@ The model is trained to:
 
 Key Design Principles
 ---------------------
-- Uses **4-bit quantized base model (QLoRA)**
-- Loads **LoRA adapters trained for intent + schema prediction**
-- Enforces deterministic JSON termination using a configurable stop token
+- Uses **4-bit quantized base model (QLoRA)** for memory efficiency
+- Loads **LoRA adapters fine-tuned for intent and schema prediction**
+- Enforces deterministic JSON termination via a configurable stop token
 - Fully configuration-driven via YAML
-- Designed for **low-latency, deterministic inference**
+- Optimized for **low-latency, deterministic inference**
 
-This script assumes that:
-- The model was trained using the same stop token
-- Tokenizer vocabulary is aligned with training
-- The adapter directory contains a valid PEFT checkpoint
+System Guarantees
+-----------------
+- Deterministic decoding (no sampling)
+- Strict JSON output enforcement
+- Robust post-processing and parsing
+- Compatibility with downstream symbolic pipelines
+
+Assumptions
+-----------
+- The model was trained using the same stop token.
+- Tokenizer vocabulary matches training configuration.
+- The adapter directory contains a valid PEFT checkpoint.
 """
 
 import json
@@ -45,6 +54,12 @@ from config.paths import FINE_TUNING_CONFIG_DIR
 # =================================================
 # Configuration
 # =================================================
+# Centralized configuration loading for inference.
+# This enables:
+# - Deterministic reproducibility
+# - Easy model swapping
+# - Rapid experimentation
+# - Safe production deployment via config isolation
 
 CONFIG_PATH = Path(FINE_TUNING_CONFIG_DIR) / "inference" / "inference_config.yaml"
 
@@ -65,6 +80,8 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # =================================================
 # Tokenizer
 # =================================================
+# Load tokenizer from adapter directory to ensure
+# full vocabulary alignment with fine-tuning.
 
 tokenizer = AutoTokenizer.from_pretrained(
     ADAPTER_DIR,
@@ -72,7 +89,8 @@ tokenizer = AutoTokenizer.from_pretrained(
 )
 tokenizer.pad_token = tokenizer.eos_token
 
-# Ensure tokenizer vocabulary is aligned with training
+# Ensure tokenizer vocabulary contains the stop token.
+# This is critical for deterministic generation termination.
 if STOP_TOKEN not in tokenizer.get_vocab():
     tokenizer.add_tokens([STOP_TOKEN], special_tokens=False)
 
@@ -82,6 +100,9 @@ stop_token_id = tokenizer.convert_tokens_to_ids(STOP_TOKEN)
 # =================================================
 # Quantization (QLoRA)
 # =================================================
+# Configure 4-bit quantization using bitsandbytes.
+# This drastically reduces memory usage while preserving
+# high-quality inference performance.
 
 qcfg = cfg["quantization"]
 
@@ -100,6 +121,8 @@ bnb_config = BitsAndBytesConfig(
 # =================================================
 # Base model loading
 # =================================================
+# Load the quantized base model and align embedding
+# matrices to match tokenizer vocabulary.
 
 base_model = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL,
@@ -114,6 +137,8 @@ base_model.resize_token_embeddings(len(tokenizer))
 # =================================================
 # Load LoRA adapters
 # =================================================
+# Attach fine-tuned LoRA adapters responsible for
+# structured intent and schema generation.
 
 model = PeftModel.from_pretrained(
     base_model,
@@ -130,7 +155,12 @@ model.config.use_cache = True
 
 def build_prompt(question: str) -> str:
     """
-    Build the instruction prompt for inference.
+    Build a fully formatted instruction prompt for inference.
+
+    This function ensures that the model receives:
+    - Clear task definition
+    - Consistent prompt structure
+    - Deterministic formatting identical to training
 
     Parameters
     ----------
@@ -155,6 +185,50 @@ def build_prompt(question: str) -> str:
 # Inference
 # =================================================
 
+def extract_first_json(text: str) -> str:
+    """
+    Extract the first complete JSON object found in a text sequence.
+
+    This method is robust against:
+    - Leading text
+    - Trailing explanations
+    - Hallucinated completions
+    - Missing stop tokens
+
+    It guarantees that only the first syntactically complete JSON
+    object is returned.
+
+    Parameters
+    ----------
+    text : str
+        Raw decoded model output.
+
+    Returns
+    -------
+    str
+        Extracted JSON string.
+
+    Raises
+    ------
+    ValueError
+        If no complete JSON object is found.
+    """
+    start = text.find("{")
+    if start == -1:
+        raise ValueError("No JSON object found in output")
+
+    stack = []
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            stack.append("{")
+        elif text[i] == "}":
+            stack.pop()
+            if not stack:
+                return text[start:i + 1]
+
+    raise ValueError("Unclosed JSON object in output")
+
+
 @torch.no_grad()
 def predict(
     question: str,
@@ -163,12 +237,18 @@ def predict(
     """
     Run deterministic inference and return structured JSON output.
 
+    The inference process:
+    - Builds a deterministic instruction prompt
+    - Performs greedy decoding (no sampling)
+    - Enforces stop-token termination
+    - Applies robust JSON extraction and parsing
+
     Parameters
     ----------
     question : str
-        Natural language question.
+        Natural language input question.
     debug : bool, optional
-        Whether to return raw output if JSON parsing fails.
+        If True, returns raw model output upon parsing failure.
 
     Returns
     -------
@@ -178,7 +258,7 @@ def predict(
     Raises
     ------
     json.JSONDecodeError
-        If the model output cannot be parsed and debug=False.
+        If JSON parsing fails and debug=False.
     """
     prompt = build_prompt(question)
 
@@ -217,17 +297,20 @@ def predict(
     # JSON parsing
     # ---------------------------------------------
     try:
-        parsed = json.loads(text)
+        json_text = extract_first_json(text)
+        parsed = json.loads(json_text)
+
         return {
             "user_intent": parsed.get("user_intent"),
             "schema": parsed.get("schema"),
         }
 
-    except json.JSONDecodeError:
+    except Exception as e:
         if debug:
             return {
                 "error": "Invalid JSON generated",
                 "raw_output": text,
+                "exception": str(e),
             }
         raise
 
@@ -238,7 +321,12 @@ def predict(
 
 def main() -> None:
     """
-    Interactive command-line interface for inference.
+    Interactive command-line interface for real-time inference.
+
+    This interface allows:
+    - Manual testing
+    - Prompt debugging
+    - Model behavior inspection
     """
     while True:
         question = input("\nPergunta (ENTER para sair): ").strip()
