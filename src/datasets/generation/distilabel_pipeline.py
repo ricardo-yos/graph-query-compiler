@@ -63,7 +63,7 @@ from distilabel.steps import StepInput, StepOutput
 from distilabel.steps.tasks import TextGeneration
 from distilabel.models.llms import GroqLLM
 
-from config.paths import CLEANED_INTENTS_DIR, BASE_DATASETS_DIR, CONFIG_DIR
+from config.paths import CLEANED_INTENTS_DIR, BASE_DATASETS_DIR, DATASETS_CONFIG_DIR
 from config.env_loader import load_env
 
 
@@ -84,7 +84,7 @@ load_env()
 # enabling reproducibility, auditing, and systematic experimentation.
 
 CONFIG_PATH = os.path.join(
-    CONFIG_DIR, "dataset_generation", "generation.yaml"
+    DATASETS_CONFIG_DIR, "generation.yaml"
 )
 
 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
