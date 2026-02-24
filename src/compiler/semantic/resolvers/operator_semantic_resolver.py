@@ -230,8 +230,6 @@ class OperatorSemanticResolver:
         # Work on a safe copy to avoid side effects
         resolved_schema = copy.deepcopy(schema_state["resolved_schema"])
 
-        analysis = schema_state.get("analysis", {})
-
         operator_analysis = []
 
         filters = resolved_schema.get("constraints", {}).get("filters", [])
@@ -286,11 +284,8 @@ class OperatorSemanticResolver:
                 "strategy": "semantic_mean_operator_vector"
             })
 
-        if operator_analysis:
-            analysis["operator"] = operator_analysis
-
         return {
             "original_schema": original_schema,
             "resolved_schema": resolved_schema,
-            "analysis": analysis
+            "analysis": operator_analysis
         }
