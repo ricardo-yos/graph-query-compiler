@@ -44,36 +44,58 @@ from config.paths import SCHEMA_DATA_DIR
 
 class EntityResolver:
     """
-    Performs structural and semantic grounding of LLM-generated attributes
-    against a predefined graph schema.
+    Performs structural and semantic grounding of LLM-generated
+    attributes against a predefined graph schema.
+
+    This component validates, filters, and semantically aligns
+    attributes inferred by the LLM with the canonical schema
+    definitions stored in `graph_schema.json`.
+
+    Parameters
+    ----------
+    model : SentenceTransformer, optional (default=None)
+        Embedding model compatible with `.encode()`.
+        If None, loads a multilingual MiniLM model automatically.
+
+        Providing a preloaded model is recommended when multiple
+        semantic components share the same encoder instance.
+
+    threshold : float, default=0.65
+        Minimum similarity required to accept an attribute match.
+
+    ngram_range : tuple[int, int], default=(1, 3)
+        Range of n-grams considered during semantic matching.
+
+    lexical_boost : float, default=0.15
+        Additive boost applied to similarity scores to favor
+        lexical alignment signals.
+
+    Notes
+    -----
+    - The canonical schema is loaded once during initialization.
+    - Embeddings are cached to avoid redundant model inference.
+    - This component acts as a semantic grounding layer and does
+      not mutate the original schema structure directly.
     """
 
     def __init__(
         self,
-        model: SentenceTransformer,
+        model: Optional[SentenceTransformer] = None,
         threshold: float = 0.65,
         ngram_range: Tuple[int, int] = (1, 3),
         lexical_boost: float = 0.15
     ):
-        """
-        Parameters
-        ----------
-        model : SentenceTransformer
-            Embedding model used for semantic similarity computation.
-        threshold : float
-            Minimum similarity required to keep an attribute.
-        ngram_range : tuple
-            Range of n-grams used during semantic matching.
-        lexical_boost : float
-            Constant additive boost applied to semantic similarity.
-        """
 
-        self.model = model
+        # Use injected model if provided; otherwise load default multilingual model
+        self.model = model or SentenceTransformer(
+            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+        )
+
         self.threshold = threshold
         self.ngram_range = ngram_range
         self.lexical_boost = lexical_boost
 
-        # Load canonical schema once (strong structural grounding layer)
+        # Load canonical schema once (structural grounding layer)
         self.schema_path = Path(SCHEMA_DATA_DIR) / "graph_schema.json"
         self.graph_schema = load_schema(self.schema_path)
 
