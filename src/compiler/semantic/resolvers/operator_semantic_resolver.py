@@ -55,27 +55,36 @@ Dependencies
 - SemanticLocalRetriever (semantic anchor detection)
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import copy
 import re
 import numpy as np
+from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from src.compiler.semantic.services.anchor_window_service import SemanticLocalRetriever
 
 
 class OperatorSemanticResolver:
     """
-    Resolves and validates relational operators for numeric attributes
-    using semantic window extraction and mean operator embeddings.
+    Validates and corrects relational operators applied to numeric
+    attributes using local semantic context and operator embeddings.
 
     Parameters
     ----------
-    model :
-        Sentence embedding model compatible with .encode().
+    model : SentenceTransformer, optional (default=None)
+        Embedding model compatible with `.encode()`.
+        If None, loads a multilingual MiniLM model automatically.
+
     window_size : int, default=5
-        Number of tokens around anchor used for semantic operator detection.
+        Number of tokens extracted around the semantic anchor.
+
     threshold : float, default=0.55
-        Minimum similarity required to validate operator correction.
+        Minimum cosine similarity required to accept correction.
+
+    Notes
+    -----
+    Operator representations are computed as mean embeddings of
+    predefined prototype expressions.
     """
 
     NUMERIC_ATTRIBUTES = {"rating", "num_reviews"}
@@ -93,13 +102,22 @@ class OperatorSemanticResolver:
         "=": ["igual a", "exatamente", "valor igual a"]
     }
 
-    def __init__(self, model, window_size: int = 5, threshold: float = 0.55):
-        self.model = model
+    def __init__(
+        self,
+        model: Optional[SentenceTransformer] = None,
+        window_size: int = 5,
+        threshold: float = 0.55
+    ):
+        # Use injected model if provided; otherwise load default multilingual model
+        self.model = model or SentenceTransformer(
+            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+        )
+
         self.threshold = threshold
 
         # Semantic anchor detector used to extract local context
         self.retriever = SemanticLocalRetriever(
-            model=model,
+            model=self.model,
             window_size=window_size
         )
 
@@ -206,8 +224,8 @@ class OperatorSemanticResolver:
             Updated pipeline result including operator validation analysis.
         """
 
-        # Preserve original schema reference
-        original_schema = schema_state["original_schema"]
+        # Preserve original schema safely (defensive copy)
+        original_schema = copy.deepcopy(schema_state["original_schema"])
 
         # Work on a safe copy to avoid side effects
         resolved_schema = copy.deepcopy(schema_state["resolved_schema"])
