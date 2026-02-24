@@ -49,7 +49,7 @@ This module depends on:
 - scikit-learn (cosine_similarity)
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import copy
@@ -70,13 +70,19 @@ class EntityTypeResolver:
     threshold : float, optional (default=0.65)
         Minimum cosine similarity required to accept a semantic match.
 
+    model : SentenceTransformer, optional (default=None)
+        Preloaded embedding model used for semantic comparison.
+        If None, a multilingual model 
+        ("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+        is loaded automatically.
+
     Attributes
     ----------
     valid_types : list[str]
         Controlled vocabulary of accepted entity types.
 
     model : SentenceTransformer
-        Pretrained embedding model used for semantic comparison.
+        Embedding model used for semantic comparison.
 
     type_embeddings : np.ndarray
         Precomputed normalized embeddings for valid types.
@@ -90,14 +96,18 @@ class EntityTypeResolver:
     to avoid repeated encoding and reduce inference overhead.
     """
 
-    def __init__(self, threshold: float = 0.65):
-        self.valid_types = [
+    def __init__(
+        self,
+        model: Optional[SentenceTransformer] = None,
+        threshold: float = 0.65
+    ):
+        self.valid_types: List[str] = [
             "pet_store",
             "veterinary_care"
         ]
 
-        # Pretrained multilingual model allows flexible user inputs
-        self.model = SentenceTransformer(
+        # If no model is provided, load default multilingual model
+        self.model = model or SentenceTransformer(
             "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
         )
 
