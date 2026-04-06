@@ -4,22 +4,24 @@ Intent Semantic Rules
 
 Declarative rule set defining which attributes, entities, and
 intent components are considered valid and meaningful for
-natural language interaction.
+Natural Language (NL) interaction.
 
 This module centralizes domain-level semantic knowledge used
 across the intent pipeline, including:
+
 - Natural-language visibility constraints
 - Human-known attribute definitions
 - Allowed count targets
 - Attribute value semantic types
 
 This file is intentionally declarative:
+
 - No executable logic
 - No validation code
 - No schema traversal
 
-All structural and semantic enforcement is handled by the
-intent validator and related pipeline components.
+All structural and semantic enforcement is handled by
+validator and policy components in the pipeline.
 
 Dependencies
 ------------
@@ -32,7 +34,7 @@ Dependencies
 # --------------------------------------------------
 
 # Attributes that can reasonably appear explicitly
-# in natural language queries.
+# in Natural Language (NL) queries.
 NL_VISIBLE_ATTRIBUTES = {
 
     "Place": {
@@ -82,21 +84,30 @@ HUMAN_KNOWN_ATTRIBUTES = {
     "Place": {
         "name",
         "type",
+        "rating",
     },
 
     "Neighborhood": {
         "name",
+        "total_resident_population",
     },
 
     "Road": {
         "name",
         "highway",
+        "maxspeed",
+        "oneway",
     },
 
     # Reviews are generally unknown beforehand,
     # except possibly by author name
     "Review": {
         "author",
+        "rating",
+    },
+
+    "Intersection": {
+        "street_count",
     },
 }
 
@@ -112,6 +123,7 @@ ALLOWED_COUNT_LABELS = {
     "Neighborhood",
     "Review",
     "Road",
+    "Intersection",
 }
 
 
@@ -120,7 +132,8 @@ ALLOWED_COUNT_LABELS = {
 # --------------------------------------------------
 
 # Defines the expected semantic type of attribute values.
-# Used by validators and operator policies.
+# Used by validators and operator policies to ensure
+# semantic consistency between attributes and operators.
 ATTRIBUTE_VALUE_TYPES = {
 
     "Place": {
@@ -148,7 +161,8 @@ ATTRIBUTE_VALUE_TYPES = {
         "rating": (int, float),
         "text": str,
         "author": str,
-        "date": str,  # kept as str to allow flexible NL parsing
+        # stored as string to allow flexible NL temporal expressions
+        "date": str,
     },
 
     "Intersection": {
