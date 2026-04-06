@@ -1,21 +1,46 @@
 """
 Intent Validation Logic
-======================
+=======================
 
-Core semantic validation rules for filtering intents before they are
-accepted into downstream pipelines such as scoring, instruction
-generation, and query synthesis.
+Semantic validation layer responsible for filtering structured
+intents before they are accepted into downstream pipeline stages.
 
-This validator enforces:
-- Natural-language visible attributes only
-- Human-known attributes where applicable
-- Semantic type consistency for filter values
-- Structural consistency between path, return, and constraints
+This module ensures that generated intents are:
 
-The goal is to guarantee that every intent:
-- Can be naturally expressed by a human user
-- Is semantically coherent with the graph schema
-- Is safe for dataset generation and LLM fine-tuning
+- structurally consistent
+- semantically meaningful
+- compatible with Natural Language (NL) expression
+- aligned with domain constraints
+
+Validation is performed declaratively using rules defined in
+`intent_semantic_rules`.
+
+Scope of validation
+-------------------
+- target structure
+- return attributes
+- filter definitions
+- ordering clauses
+- aggregation rules
+- path constraints
+- attribute semantic types
+
+This module does NOT:
+- generate intents
+- modify intents
+- traverse graph schema
+- perform scoring or ranking
+
+Used by
+-------
+- dataset generation pipeline
+- structural generator filtering stage
+- intent quality control
+
+Dependencies
+------------
+intent_semantic_rules :
+    Declarative semantic definitions used for validation.
 """
 
 from .intent_semantic_rules import (
@@ -30,8 +55,30 @@ from .intent_semantic_rules import (
 # Global semantic constraints
 # --------------------------------------------------
 
-# Maximum traversal depth to keep queries realistic in NL
+# Maximum number of relationship hops allowed in path traversal.
+# Prevents overly complex graph queries unlikely to appear in NL.
 MAX_PATH_LENGTH = 3
+
+
+# --------------------------------------------------
+# Internal helper
+# --------------------------------------------------
+
+def get_schema(intent: dict) -> dict:
+    """
+    Extract schema specification from intent.
+
+    Parameters
+    ----------
+    intent : dict
+        Full intent object.
+
+    Returns
+    -------
+    dict
+        Schema specification section of the intent.
+    """
+    return intent.get("schema_spec", {})
 
 
 # --------------------------------------------------
@@ -40,33 +87,25 @@ MAX_PATH_LENGTH = 3
 
 def is_nl_visible(label: str, attribute: str) -> bool:
     """
-    Check whether an attribute is visible and meaningful in
-    natural language queries.
+    Check whether attribute can appear explicitly in NL queries.
 
     Parameters
     ----------
     label : str
-        Node label (e.g., Place, Neighborhood).
+        Node label.
     attribute : str
         Attribute name.
 
     Returns
     -------
     bool
-        True if attribute is allowed to appear in NL questions.
     """
     return attribute in NL_VISIBLE_ATTRIBUTES.get(label, set())
 
 
 def is_human_known(label: str, attribute: str) -> bool:
     """
-    Check whether an attribute is typically known or explicitly
-    provided by a human user.
-
-    Examples
-    --------
-    - Place.name
-    - Neighborhood.name
+    Check whether attribute is realistically known by the user.
 
     Parameters
     ----------
@@ -78,19 +117,17 @@ def is_human_known(label: str, attribute: str) -> bool:
     Returns
     -------
     bool
-        True if attribute is considered human-known.
     """
     return attribute in HUMAN_KNOWN_ATTRIBUTES.get(label, set())
 
 
 def is_value_type_valid(label: str, attribute: str, value) -> bool:
     """
-    Validate whether a filter value matches the expected
-    semantic type of the given label + attribute.
+    Validate semantic compatibility between attribute and value.
 
-    This prevents semantically invalid filters such as:
-    - rating = "high"
-    - population > "many"
+    Allows light coercion for common NL representations:
+    - numeric values as strings ("4.5")
+    - boolean values as strings ("true", "yes")
 
     Parameters
     ----------
@@ -98,186 +135,427 @@ def is_value_type_valid(label: str, attribute: str, value) -> bool:
         Node label.
     attribute : str
         Attribute name.
-    value : Any
-        Value used in the filter.
+    value :
+        Value provided in filter.
 
     Returns
     -------
     bool
-        True if value matches the expected semantic type.
     """
+
     expected_type = ATTRIBUTE_VALUE_TYPES.get(label, {}).get(attribute)
 
     if expected_type is None:
         return False
 
-    return isinstance(value, expected_type)
+    if isinstance(value, expected_type):
+        return True
+
+    # allow numeric values expressed as strings
+    if expected_type in [(int, float), int, float]:
+        if isinstance(value, str):
+            try:
+                float(value)
+                return True
+            except ValueError:
+                return False
+
+    # allow boolean values expressed in NL
+    if expected_type is bool and isinstance(value, str):
+        if value.lower() in {"true", "false", "1", "0", "yes", "no"}:
+            return True
+
+    return False
 
 
 # --------------------------------------------------
-# Section-level validation
+# Intent metadata validation
 # --------------------------------------------------
 
-def validate_return_section(intent: dict) -> bool:
+def validate_intent_meta(intent: dict) -> bool:
     """
-    Validate the 'return' section of the intent.
+    Validate high-level intent metadata structure.
 
-    Rules
-    -----
-    - Return section must exist
-    - Return label must be defined
-    - All returned attributes must be NL-visible
+    Ensures presence and type correctness of:
+    - intent type
+    - modifiers
+
+    Parameters
+    ----------
+    intent : dict
+
+    Returns
+    -------
+    bool
     """
-    ret = intent.get("return")
-    if not ret:
+
+    meta = intent.get("intent")
+
+    if not isinstance(meta, dict):
         return False
 
-    label = ret.get("label")
-    if not label:
+    intent_type = meta.get("type")
+
+    if not isinstance(intent_type, str):
         return False
 
-    for attr in ret.get("attributes", []):
+    modifiers = meta.get("modifiers")
+
+    if modifiers is not None:
+        if not isinstance(modifiers, list):
+            return False
+
+        if not all(isinstance(m, str) for m in modifiers):
+            return False
+
+    return True
+
+
+# --------------------------------------------------
+# Target validation
+# --------------------------------------------------
+
+def validate_target(intent: dict) -> bool:
+    """
+    Validate presence and structure of target node.
+
+    Parameters
+    ----------
+    intent : dict
+
+    Returns
+    -------
+    bool
+    """
+
+    schema = get_schema(intent)
+
+    target = schema.get("target")
+
+    if not isinstance(target, dict):
+        return False
+
+    label = target.get("label")
+
+    if not isinstance(label, str):
+        return False
+
+    return True
+
+
+# --------------------------------------------------
+# Return attributes validation
+# --------------------------------------------------
+
+def validate_return_attributes(intent: dict) -> bool:
+    """
+    Validate attributes requested in SELECT clause.
+
+    Ensures attributes are NL-visible.
+
+    Parameters
+    ----------
+    intent : dict
+
+    Returns
+    -------
+    bool
+    """
+
+    schema = get_schema(intent)
+
+    label = schema.get("target", {}).get("label")
+    attrs = schema.get("return_attributes", [])
+
+    if not isinstance(attrs, list):
+        return False
+
+    if not all(isinstance(a, str) for a in attrs):
+        return False
+
+    for attr in attrs:
         if not is_nl_visible(label, attr):
             return False
 
     return True
 
 
-def validate_known_section(intent: dict) -> bool:
-    """
-    Validate the 'known' section of the intent.
+# --------------------------------------------------
+# Filter validation
+# --------------------------------------------------
 
-    Rules
-    -----
-    - Known attributes must be human-known
-    - If 'known' is missing or empty, validation passes
+def validate_filters(intent: dict) -> bool:
     """
-    known = intent.get("known")
-    if not known:
+    Validate filter clause semantic consistency.
+
+    Checks:
+    - attribute existence
+    - semantic value compatibility
+    - structural integrity
+
+    Parameters
+    ----------
+    intent : dict
+
+    Returns
+    -------
+    bool
+    """
+
+    schema = get_schema(intent)
+
+    filters = schema.get("filters")
+
+    if filters is None:
         return True
 
-    for item in known:
-        label = item.get("label")
-        attr = item.get("attribute")
+    if not isinstance(filters, list):
+        return False
 
-        if not label or not attr:
-            return False
+    for f in filters:
 
-        if not is_human_known(label, attr):
-            return False
-
-    return True
-
-
-def validate_constraints(intent: dict) -> bool:
-    """
-    Validate the 'constraints' section, including:
-    - filters
-    - order_by
-    - limit
-
-    This step enforces semantic correctness and type safety.
-    """
-    constraints = intent.get("constraints", {})
-
-    # -------------------------------
-    # Filters
-    # -------------------------------
-    for f in constraints.get("filters", []):
-        label = f.get("label")
+        label = f.get("node_label")
         attr = f.get("attribute")
         value = f.get("value")
 
         if not label or not attr:
             return False
 
-        if not is_nl_visible(label, attr):
+        if ATTRIBUTE_VALUE_TYPES.get(label, {}).get(attr) is None:
             return False
 
         if value is not None:
             if not is_value_type_valid(label, attr, value):
                 return False
 
-    # -------------------------------
-    # Order by
-    # -------------------------------
-    for ob in constraints.get("order_by", []):
-        label = ob.get("label")
+        else:
+
+            if not isinstance(label, str):
+                return False
+
+            if not isinstance(attr, str):
+                return False
+
+    return True
+
+
+# --------------------------------------------------
+# Order by validation
+# --------------------------------------------------
+
+def validate_order_by(intent: dict) -> bool:
+    """
+    Validate ORDER BY clause attributes.
+
+    Parameters
+    ----------
+    intent : dict
+
+    Returns
+    -------
+    bool
+    """
+
+    schema = get_schema(intent)
+
+    order_by = schema.get("order_by")
+
+    if order_by is None:
+        return True
+
+    if not isinstance(order_by, list):
+        return False
+
+    for ob in order_by:
+
+        label = ob.get("node_label")
         attr = ob.get("attribute")
 
         if not label or not attr:
             return False
 
-        if not is_nl_visible(label, attr):
-            return False
-
-    # -------------------------------
-    # Limit
-    # -------------------------------
-    limit = constraints.get("limit")
-
-    if limit is not None:
-        if isinstance(limit, list):
-            if not all(isinstance(l, int) and l > 0 for l in limit):
-                return False
-        elif not isinstance(limit, int) or limit <= 0:
-            return False
-
-    return True
-
-
-def validate_path_and_constraints(intent: dict) -> bool:
-    """
-    Validate the interaction between path and constraints.
-
-    Rules
-    -----
-    - Path length must be <= MAX_PATH_LENGTH
-    - order_by labels must appear in path or return section
-    """
-    path = intent.get("path", [])
-    constraints = intent.get("constraints", {})
-
-    if len(path) > MAX_PATH_LENGTH:
-        return False
-
-    valid_nodes = set()
-    for step in path:
-        if step.get("from"):
-            valid_nodes.add(step["from"])
-        if step.get("to"):
-            valid_nodes.add(step["to"])
-
-    return_label = intent.get("return", {}).get("label")
-    if return_label:
-        valid_nodes.add(return_label)
-
-    for ob in constraints.get("order_by", []):
-        if ob.get("label") not in valid_nodes:
+        if ATTRIBUTE_VALUE_TYPES.get(label, {}).get(attr) is None:
             return False
 
     return True
 
 
 # --------------------------------------------------
-# Aggregate validation entry point
+# Limit validation
 # --------------------------------------------------
 
-def is_valid_intent(intent: dict) -> bool:
+def validate_limit(intent: dict) -> bool:
     """
-    Validate an intent according to the final dataset contract.
+    Validate LIMIT clause constraints.
 
-    This function aggregates all validation layers and acts as
-    the single entry point for intent filtering.
+    Parameters
+    ----------
+    intent : dict
 
     Returns
     -------
     bool
-        True if intent is fully valid and safe for downstream usage.
     """
-    return (
-        validate_return_section(intent)
-        and validate_known_section(intent)
-        and validate_constraints(intent)
-        and validate_path_and_constraints(intent)
-    )
+
+    schema = get_schema(intent)
+
+    limit = schema.get("limit")
+
+    if limit is None:
+        return True
+
+    if not isinstance(limit, int):
+        return False
+
+    if limit <= 0:
+        return False
+
+    return True
+
+
+# --------------------------------------------------
+# Path validation
+# --------------------------------------------------
+
+def validate_path(intent: dict) -> bool:
+    """
+    Validate graph traversal path structure.
+
+    Constraints:
+    - maximum path length
+    - required keys per step
+
+    Parameters
+    ----------
+    intent : dict
+
+    Returns
+    -------
+    bool
+    """
+
+    schema = get_schema(intent)
+
+    path = schema.get("path")
+
+    if path is None:
+        return True
+
+    if not isinstance(path, list):
+        return False
+
+    if len(path) > MAX_PATH_LENGTH:
+        return False
+
+    for step in path:
+
+        if "relationship" not in step:
+            return False
+
+        if "target" not in step:
+            return False
+
+    return True
+
+
+# --------------------------------------------------
+# Aggregate validation
+# --------------------------------------------------
+
+def validate_aggregate(intent: dict) -> bool:
+    """
+    Validate aggregate function semantic compatibility.
+
+    Supported functions:
+    - count
+    - sum
+    - avg
+
+    Parameters
+    ----------
+    intent : dict
+
+    Returns
+    -------
+    bool
+    """
+
+    schema = get_schema(intent)
+    agg = schema.get("aggregate")
+
+    if agg is None:
+        return True
+
+    func = agg.get("function")
+    attr = agg.get("attribute")
+    label = schema.get("target", {}).get("label")
+
+    if not func or not label:
+        return False
+
+    # COUNT
+    if func == "count":
+        if label not in ALLOWED_COUNT_LABELS:
+            return False
+        return True
+
+    # SUM / AVG
+    elif func in {"sum", "avg"}:
+        if attr is None:
+            return False
+
+        expected_type = ATTRIBUTE_VALUE_TYPES.get(label, {}).get(attr)
+
+        if expected_type not in [(int, float), int, float]:
+            return False
+
+        return True
+
+    return False
+
+
+# --------------------------------------------------
+# Main validation entry point
+# --------------------------------------------------
+
+def is_valid_intent(intent: dict) -> bool:
+    """
+    Perform full semantic validation of an intent.
+
+    Sequentially applies all validation checks.
+
+    Parameters
+    ----------
+    intent : dict
+
+    Returns
+    -------
+    bool
+        True if intent is valid.
+    """
+
+    if not validate_intent_meta(intent):
+        return False
+
+    if not validate_target(intent):
+        return False
+
+    if not validate_return_attributes(intent):
+        return False
+
+    if not validate_filters(intent):
+        return False
+
+    if not validate_order_by(intent):
+        return False
+
+    if not validate_limit(intent):
+        return False
+
+    if not validate_path(intent):
+        return False
+
+    if not validate_aggregate(intent):
+        return False
+
+    return True
