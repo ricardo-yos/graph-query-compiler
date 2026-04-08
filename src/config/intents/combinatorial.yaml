@@ -1,0 +1,18 @@
+# ======================================================
+# GLOBAL STRUCTURAL LIMITS (upper bounds)
+# ======================================================
+
+max_operators_per_attribute: 2
+
+deduplicate_structures: true
+
+
+# ======================================================
+# DATASET BALANCING LIMITS
+# ======================================================
+
+enable_semantic_balance: true
+
+min_per_bucket: 30
+
+max_per_bucket: 60
