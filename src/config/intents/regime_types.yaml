@@ -1,0 +1,94 @@
+# ======================================================
+# STRUCTURAL QUERY REGIMES
+# ======================================================
+# Defines the structural diversity of graph queries
+# generated in the combinatorial dataset.
+#
+# Each regime controls:
+# - graph traversal depth
+# - use of filters
+# - use of aggregation
+# - ranking behavior
+# ======================================================
+
+regimes:
+
+  lookup_basic:
+
+    max_depth: 0
+    allow_aggregation: false
+    allow_order_by: false
+    allow_limit: false
+    allow_multiple_filters: false
+    max_filters_per_node: 0
+
+
+  lookup_with_path:
+
+    max_depth: 1
+    allow_aggregation: false
+    allow_order_by: false
+    allow_limit: false
+    allow_multiple_filters: false
+    max_filters_per_node: 1
+
+
+  filtered_lookup:
+
+    max_depth: 1   # allows relational filtering
+    allow_aggregation: false
+    allow_order_by: false
+    allow_limit: false
+    allow_multiple_filters: true
+    max_filters_per_node: 3
+
+
+  count_query:
+
+    max_depth: 0
+    allow_aggregation: true
+    aggregate_functions: ["count"]
+    allow_order_by: false
+    allow_limit: false
+    allow_multiple_filters: true
+    max_filters_per_node: 3
+
+
+  aggregate_query:
+
+    max_depth: 0
+    allow_aggregation: true
+    allow_order_by: false
+    allow_limit: false
+    allow_multiple_filters: true
+    max_filters_per_node: 3
+
+
+  aggregate_with_path:
+
+    max_depth: 1
+    allow_aggregation: true
+    allow_order_by: false
+    allow_limit: false
+    allow_multiple_filters: true
+    max_filters_per_node: 3
+
+
+  ranking_query:
+
+    max_depth: 1
+    allow_aggregation: false
+    allow_order_by: true
+    allow_limit: true
+    allow_multiple_filters: false
+    max_filters_per_node: 0
+
+
+  ranking_with_filter:
+
+    max_depth: 1
+    allow_aggregation: false
+    allow_order_by: true
+    allow_limit: true
+    allow_multiple_filters: true
+    max_filters_per_node: 3
