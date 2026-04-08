@@ -1,54 +1,52 @@
 """
-Question Dataset Generation Pipeline
-====================================
+Question Generation Pipeline
+============================
 
-Deterministic pipeline for generating natural language questions
-(Brazilian Portuguese) from structured graph query intents.
+Deterministic pipeline that converts structured graph query intents
+into natural language questions in Brazilian Portuguese (pt-BR).
 
-This module transforms validated and quality-filtered intents into
-natural, human-like questions that a user would realistically ask
-when interacting with a graph-backed system.
+Each structured intent is transformed into exactly one realistic
+user question while preserving the original schema for full
+traceability between natural language and graph query structure.
 
-Each generated example contains:
-- A single natural language question (pt-BR)
-- The corresponding structured intent schema used to generate it
-
-This dataset is designed for:
+The resulting dataset is suitable for:
 - LLM fine-tuning
-- Instruction-following alignment
-- Semantic parsing and intent understanding tasks
+- instruction-following alignment
+- semantic parsing
+- intent understanding
+- natural language → graph query mapping
 
-Important Characteristics
--------------------------
-- Generates ONLY questions (no answers, no Cypher, no explanations)
-- Preserves the original intent schema for full traceability
-- Uses deterministic, rule-based prompting for consistency
-- Avoids hallucination by strictly using intent-provided information
-- Optimized for graph query understanding in real-world scenarios
+Key Characteristics
+-------------------
+- Generates only questions (no answers, no Cypher, no explanations)
+- Strictly grounded on the provided intent schema
+- Deterministic prompting for consistency and reproducibility
+- Preserves semantic fidelity to the original structure
+- Avoids hallucination by restricting generation to schema information
+- Optimized for realistic user queries over graph-based systems
 
 Input
 -----
-- JSONL file containing semantically validated and quality-filtered intents
+JSONL file containing structurally validated intents.
 
 Output
 ------
-- JSONL dataset where each line contains:
-  {
-      "question": "<natural language question>",
-      "user_intent": "<intent type>",
-      "schema": <structured intent subset>
-  }
+JSONL dataset where each row contains:
+
+{
+    "question": "<natural language question>",
+    "user_intent": "<intent type>",
+    "schema": <structured intent subset>
+}
 
 Language
 --------
-- Brazilian Portuguese (pt-BR) only
+Brazilian Portuguese (pt-BR) only.
 
 Notes
 -----
-- This pipeline assumes all intents are already valid and cleaned.
-- No semantic validation or quality scoring is performed here.
-- Generated questions are concise, natural, and conversational,
-  avoiding any schema- or database-specific terminology.
+This pipeline assumes all intents are already validated and filtered.
+No structural or semantic validation is performed here.
 """
 
 import json
@@ -56,6 +54,7 @@ import os
 import time
 import yaml
 from typing import Any, Dict, List, ClassVar
+from tqdm import tqdm
 
 from distilabel.pipeline import Pipeline
 from distilabel.steps import LoadDataFromDicts, Step
@@ -63,7 +62,7 @@ from distilabel.steps import StepInput, StepOutput
 from distilabel.steps.tasks import TextGeneration
 from distilabel.models.llms import GroqLLM
 
-from config.paths import CLEANED_INTENTS_DIR, BASE_DATASETS_DIR, DATASETS_CONFIG_DIR
+from config.paths import INTENTS_DATA_DIR, BASE_DATASETS_DIR, DATASETS_CONFIG_DIR
 from config.env_loader import load_env
 
 
@@ -71,18 +70,16 @@ from config.env_loader import load_env
 # Environment setup
 # ============================================================
 
-# Load environment variables (API keys, tokens, etc.)
-# This must be executed before initializing any LLM backend
+# Load environment variables (API keys, etc.)
+# Must be executed before initializing the LLM client
 load_env()
 
 
 # ============================================================
 # Configuration
 # ============================================================
-# Centralized experiment configuration loading.
-# This allows full control over dataset generation parameters,
-# enabling reproducibility, auditing, and systematic experimentation.
 
+# Centralized configuration ensures reproducibility
 CONFIG_PATH = os.path.join(
     DATASETS_CONFIG_DIR, "generation.yaml"
 )
@@ -90,11 +87,14 @@ CONFIG_PATH = os.path.join(
 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
     cfg: Dict[str, Any] = yaml.safe_load(f)
 
+
+# LLM generation parameters
 MODEL_NAME = cfg["generation"]["model"]
 TEMPERATURE = cfg["generation"]["temperature"]
 BATCH_SIZE = cfg["generation"]["batch_size"]
 SLEEP_SECONDS = cfg["generation"]["sleep_seconds"]
 
+# dataset paths
 INTENTS_FILE = cfg["input"]["intents_file"]
 OUTPUT_FILE = cfg["output"]["dataset_file"]
 
@@ -107,19 +107,20 @@ def load_intents(path: str) -> List[Dict[str, Any]]:
     """
     Load structured intents from a JSONL file.
 
-    Each line of the input file must contain a single JSON object
-    representing a validated intent schema.
+    Each line must contain one JSON object describing
+    a validated intent structure.
 
     Parameters
     ----------
     path : str
-        Path to the JSONL file containing cleaned and validated intents.
+        Path to the JSONL file.
 
     Returns
     -------
     List[Dict[str, Any]]
-        List of intent dictionaries ready for processing.
+        List of intent dictionaries.
     """
+
     with open(path, "r", encoding="utf-8") as f:
         return [json.loads(line) for line in f]
 
@@ -128,72 +129,75 @@ def chunk_list(lst: List[Any], chunk_size: int) -> List[List[Any]]:
     """
     Split a list into fixed-size batches.
 
-    This function is used to:
-    - Control LLM request payload size
-    - Reduce GPU memory pressure
-    - Avoid API rate limits
-    - Improve stability during long-running generation jobs
+    Batching helps:
+    - control token usage
+    - reduce latency spikes
+    - avoid API rate limits
+    - improve pipeline stability
 
     Parameters
     ----------
     lst : List[Any]
-        Input list to be chunked.
+        Input list.
     chunk_size : int
-        Maximum number of elements per chunk.
+        Maximum number of elements per batch.
 
     Returns
     -------
     List[List[Any]]
-        List of chunks with at most `chunk_size` elements each.
+        List of batches.
     """
-    return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
+
+    return [
+        lst[i:i + chunk_size]
+        for i in range(0, len(lst), chunk_size)
+    ]
 
 
 def safe_value(obj: Dict[str, Any]) -> str:
     """
-    Safely extract a constraint value from a schema object.
+    Extract filter value from multiple schema formats.
 
-    This function supports multiple schema formats and legacy
-    representations, providing a robust fallback strategy when
-    explicit values are missing.
-
-    Supported value fields:
-    - value_str
-    - value_int
-    - value_float
-    - value (legacy schemas)
+    Supports backward compatibility with legacy datasets
+    where value typing may differ.
 
     Parameters
     ----------
     obj : Dict[str, Any]
-        Constraint object from the intent schema.
+        Filter specification.
 
     Returns
     -------
     str
-        String representation of the extracted value, or a placeholder
-        token when no explicit value is provided.
+        String representation of the filter value.
     """
+
     if obj.get("value_str") is not None:
         return str(obj["value_str"])
+
     if obj.get("value_int") is not None:
         return str(obj["value_int"])
+
     if obj.get("value_float") is not None:
         return str(obj["value_float"])
-    if obj.get("value") is not None:  # legacy support
+
+    if obj.get("value") is not None:
         return str(obj["value"])
+
+    # placeholder keeps sentence structure valid
     return "<VALUE>"
 
 
 def intent_to_text(intent: dict) -> str:
     """
-    Convert a structured graph intent into a controlled textual
-    representation suitable for LLM prompting.
+    Convert structured intent into a controlled textual representation.
 
-    This intermediate textual form:
-    - Is NOT exposed to the final user
-    - Serves exclusively as semantic guidance for the LLM
-    - Enforces controlled, faithful question generation
+    This representation acts as an intermediate format that helps the LLM:
+
+    - preserve schema semantics
+    - maintain structural fidelity
+    - avoid hallucinating unsupported information
+    - produce consistent question patterns
 
     Parameters
     ----------
@@ -203,42 +207,114 @@ def intent_to_text(intent: dict) -> str:
     Returns
     -------
     str
-        Textual description of the intent, optimized for prompt construction.
+        Text describing the intent semantics.
     """
-    parts = [f"User intent: {intent.get('user_intent', 'unknown')}"]
 
-    # Describe traversal path if present
-    if intent.get("path"):
+    intent_meta = intent.get("intent", {})
+    schema = intent.get("schema_spec", {})
+
+    parts = []
+
+    # intent category influences wording style
+    intent_type = intent_meta.get("type", "unknown")
+    modifiers = intent_meta.get("modifiers") or []
+
+    parts.append(f"Intent type: {intent_type}")
+
+    if modifiers:
+        parts.append(
+            f"Modifiers: {', '.join(modifiers)}"
+        )
+
+    # main entity queried by the user
+    target = schema.get("target", {}).get("label")
+
+    if target:
+        parts.append(
+            f"Target node: {target}"
+        )
+
+    # traversal path between entities
+    path = schema.get("path")
+
+    if path:
         path_desc = " -> ".join(
-            f"{p.get('from')} {p.get('rel')} {p.get('to')}"
-            for p in intent["path"]
-        )
-        parts.append(f"Path: {path_desc}")
 
-    # Describe known entities (anchors)
-    if intent.get("known"):
-        known_desc = ", ".join(
-            f"{k.get('label')} {k.get('attribute')} "
-            f"{k.get('operator')} {safe_value(k)}"
-            for k in intent["known"]
-        )
-        parts.append(f"Known nodes: {known_desc}")
+            f"{step.get('relationship')} -> {step.get('target')}"
 
-    # Describe filtering constraints
-    filters = intent.get("constraints", {}).get("filters", [])
+            for step in path
+        )
+
+        parts.append(
+            f"Traversal path: {path_desc}"
+        )
+
+    # constraints applied to nodes
+    filters = schema.get("filters")
+
     if filters:
+
         filters_desc = ", ".join(
-            f"{f.get('label')} {f.get('attribute')} "
-            f"{f.get('operator')} {safe_value(f)}"
+
+            f"{f.get('node_label')} "
+            f"{f.get('attribute')} "
+            f"{f.get('operator')} "
+            f"{safe_value(f)}"
+
             for f in filters
         )
-        parts.append(f"Filters: {filters_desc}")
 
-    # Describe return projection
-    if intent.get("return"):
-        ret = intent["return"]
-        attrs = ", ".join(ret.get("attributes", []))
-        parts.append(f"Return attributes: {ret.get('label')} ({attrs})")
+        parts.append(
+            f"Filters: {filters_desc}"
+        )
+
+    # attributes expected in the result
+    returns = schema.get("return_attributes")
+
+    if returns:
+
+        parts.append(
+            f"Return attributes: {', '.join(returns)}"
+        )
+
+    # ranking influences phrasing like "top 10"
+    order_by = schema.get("order_by")
+
+    if order_by:
+
+        order_desc = ", ".join(
+
+            f"{o.get('attribute')} "
+            f"{o.get('direction','ASC')}"
+
+            for o in order_by
+        )
+
+        parts.append(
+            f"Order by: {order_desc}"
+        )
+
+    # limit affects expressions like "first 5"
+    limit = schema.get("limit")
+
+    if limit:
+
+        parts.append(
+            f"Limit: {limit}"
+        )
+
+    # aggregation affects semantics strongly
+    aggregate = schema.get("aggregate")
+
+    if aggregate:
+
+        parts.append(
+
+            f"Aggregate: "
+            f"{aggregate.get('function')} "
+            f"{aggregate.get('attribute')}"
+
+        )
 
     return "\n".join(parts)
 
@@ -249,53 +325,94 @@ def intent_to_text(intent: dict) -> str:
 
 class IntentToInstruction(Step):
     """
-    Transform a structured graph intent into a SYSTEM-level instruction
-    for controlled natural language question generation.
+    Convert structured intents into deterministic instructions
+    for the LLM.
 
-    This step:
-    - Builds a deterministic prompt template
-    - Enforces strict linguistic and semantic constraints
-    - Prevents hallucination and uncontrolled inference
+    The generated instruction constrains the model to:
 
-    It does NOT generate the final question.
-    It only prepares the instruction consumed by the LLM.
-
-    Enforced constraints:
-    - Brazilian Portuguese (pt-BR)
-    - Natural and conversational tone
-    - Semantic faithfulness to the input schema
-    - No schema, database, or implementation details in the output
+    - produce one question only
+    - preserve semantic meaning of the schema
+    - avoid implementation-specific terminology
+    - write fluent Brazilian Portuguese
     """
 
     outputs: ClassVar[list[str]] = ["instruction"]
 
     def process(self, inputs: StepInput) -> StepOutput:
+
         outputs = []
 
         for intent in inputs:
+
+            # skip malformed records
             if not isinstance(intent, dict):
                 continue
 
-            if not intent.get("user_intent") or not intent.get("return"):
+            if "intent" not in intent or "schema_spec" not in intent:
                 continue
 
             intent_text = intent_to_text(intent)
 
+            # highly constrained prompt improves consistency
+            # and reduces hallucination risk
             instruction = (
                 "[SYSTEM]\n"
-                "You are an expert assistant for graph databases.\n"
-                "Convert a structured query intent into ONE natural question.\n\n"
-                "RULES:\n"
-                "- Write strictly in Brazilian Portuguese (pt-BR)\n"
-                "- Use simple, conversational language\n"
-                "- Be concise and objective\n"
-                "- Do NOT explain data structures\n"
-                "- Do NOT add or infer information\n"
-                "- Return ONLY one question\n\n"
+                "You convert a structured graph intent into ONE natural question.\n\n"
+
+                "Write the question in Brazilian Portuguese (pt-BR).\n\n"
+
+                "Goal:\n"
+                "Create 1 natural question that expresses exactly the information contained in the intent.\n\n"
+
+                "GENERAL:\n"
+                "- The question must sound natural and realistic\n"
+                "- Use conversational language\n"
+                "- Reflect the full meaning of the intent\n"
+                "- Do not add information not present in the schema\n"
+                "- Do not omit relevant information\n"
+                "- Prefer short but complete questions\n\n"
+
+                "TARGET:\n"
+                "- The target label must appear as the main subject of the question\n"
+                "- The user should clearly be asking about this entity type\n\n"
+
+                "PATH:\n"
+                "- Represent each relationship as a natural phrase connecting entities\n"
+                "- Preserve the logical order of relationships\n"
+                "- The path should appear as contextual information in the question\n\n"
+
+                "FILTERS:\n"
+                "- All conditions must appear explicitly in the question\n"
+                "- Include attribute values when present\n"
+                "- Use natural wording instead of attribute names\n\n"
+
+                "AGGREGATE:\n"
+                "- Express aggregation clearly using natural language\n"
+                "  avg → média\n"
+                "  count → quantos\n"
+                "  max → maior\n"
+                "  min → menor\n\n"
+
+                "ORDER:\n"
+                "- Express ranking naturally\n"
+                "  desc → maiores, melhores, mais bem avaliados\n"
+                "  asc → menores, mais baratos\n\n"
+
+                "LIMIT:\n"
+                "- Express numeric limits explicitly when present\n\n"
+
+                "CONSISTENCY:\n"
+                "- The question should allow reconstruction of the intent structure\n"
+                "- Avoid ambiguity about which entity each condition refers to\n\n"
+
+                "OUTPUT:\n"
+                "- Generate only 1 question\n"
+                "- Do not explain anything\n"
+                "- Do not output JSON\n\n"
+
                 "[USER]\n"
                 f"{intent_text}"
             )
-
             outputs.append(
                 {
                     **intent,
@@ -308,53 +425,90 @@ class IntentToInstruction(Step):
 
 
 # ============================================================
-# Pipeline Step: Question + Schema Selection
+# Pipeline Step: Question + Schema normalization
 # ============================================================
 
 class SelectQuestionSchema(Step):
     """
-    Extract and normalize the final dataset sample.
+    Extract generated question and attach normalized schema.
 
-    This step builds the supervised learning example by pairing:
-    - The generated natural language question
-    - The corresponding user intent
-    - A minimal and normalized schema representation
-
-    This guarantees:
-    - Clean supervision signals
-    - Explicit semantic alignment
-    - Traceability between natural language and structure
+    Ensures filter values have explicit typing, improving
+    dataset consistency for training downstream models.
     """
 
     outputs: ClassVar[list[str]] = ["question", "user_intent", "schema"]
 
-
     def process(self, items: StepInput) -> StepOutput:
+
         results = []
 
         for item in items:
+
             question = item.get("qa_pair")
+
             if not isinstance(question, str):
                 continue
 
-            schema = {
-                "query_pattern": item.get("query_pattern"),
-                "path": item.get("path"),
-                "constraints": item.get("constraints"),
-                "known": item.get("known"),
-                "return": item.get("return"),
-            }
+            intent_meta = item.get("intent", {})
+            schema = item.get("schema_spec", {})
+
+            # normalize filter values for consistent dataset structure
+            schema = self.normalize_filter_values(schema)
 
             results.append(
                 {
                     "question": question.strip(),
-                    "user_intent": item.get("user_intent"),
+                    "user_intent": intent_meta.get("type"),
                     "schema": schema,
                 }
             )
 
         if results:
             yield results
+
+    @staticmethod
+    def normalize_filter_values(schema: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Normalize filter values into explicit typed fields.
+
+        Converts generic "value" fields into:
+        - value_str
+        - value_int
+        - value_float
+
+        Parameters
+        ----------
+        schema : Dict[str, Any]
+
+        Returns
+        -------
+        Dict[str, Any]
+        """
+
+        filters = schema.get("filters", [])
+
+        for f in filters:
+
+            value = f.pop("value", None)
+
+            # explicit typing avoids ambiguity for downstream models
+            f["value_str"] = None
+            f["value_int"] = None
+            f["value_float"] = None
+
+            if isinstance(value, str):
+                f["value_str"] = value
+
+            elif isinstance(value, int):
+                f["value_int"] = value
+
+            elif isinstance(value, float):
+                f["value_float"] = value
+
+            elif value is not None:
+                f["value_str"] = str(value)
+
+        return schema
 
 
 # ============================================================
@@ -363,33 +517,42 @@ class SelectQuestionSchema(Step):
 
 def main() -> None:
     """
-    Execute the full question dataset generation pipeline.
+    Execute the full dataset generation workflow.
 
-    This function orchestrates the full workflow:
-    - Loads validated intents from disk
-    - Processes them in small batches
-    - Generates exactly one natural language question per intent
-    - Persists the final dataset in JSONL format
+    Workflow
+    --------
+    1. load structural intents
+    2. convert intents to instructions
+    3. generate one question per intent
+    4. normalize schema values
+    5. persist dataset as JSONL
 
-    The batching strategy is designed to:
-    - Control latency and memory usage
-    - Avoid API rate limits
-    - Improve long-run pipeline stability
+    Batching is used to:
+
+    - control API usage
+    - improve robustness
+    - prevent request bursts
     """
 
-    intents_path = os.path.join(CLEANED_INTENTS_DIR, INTENTS_FILE)
+    intents_path = os.path.join(INTENTS_DATA_DIR, INTENTS_FILE)
     output_path = os.path.join(BASE_DATASETS_DIR, OUTPUT_FILE)
 
     intents = load_intents(intents_path)
+
     print(f"Loaded {len(intents)} intents")
 
     all_outputs: List[Dict[str, Any]] = []
 
-    # Process intents in small batches to control
-    # LLM latency, cost and rate limits
-    for batch_idx, batch in enumerate(chunk_list(intents, BATCH_SIZE)):
-        print(f"\nProcessing batch {batch_idx + 1}")
+    batches = chunk_list(intents, BATCH_SIZE)
 
+    print(f"Total intents: {len(intents)}")
+    print(f"Total batches: {len(batches)}")
+
+    for batch_idx, batch in enumerate(
+        tqdm(batches, desc="Generating questions", unit="batch")
+    ):
+
+        # each batch runs as an independent distilabel pipeline
         with Pipeline(name=f"question-batch-{batch_idx}") as pipeline:
 
             load_step = LoadDataFromDicts(
@@ -407,33 +570,41 @@ def main() -> None:
                     model=MODEL_NAME,
                     generation_kwargs={"temperature": TEMPERATURE},
                 ),
+
+                # only the instruction column is sent to the LLM
                 columns=["instruction"],
-                output_mappings={"generation": "qa_pair"},
+
+                output_mappings={
+                    "generation": "qa_pair"
+                },
             )
 
             select_step = SelectQuestionSchema(
                 name="select_question_schema"
             )
 
-            # Define execution graph
             load_step >> intent_step >> generation_step >> select_step
 
         dataset = pipeline.run(use_cache=False)
-        all_outputs.extend(dataset["default"]["train"].to_list())
 
-        # Small pause to reduce API pressure
+        all_outputs.extend(
+            dataset["default"]["train"].to_list()
+        )
+
+        # small delay prevents API rate spikes
         time.sleep(SLEEP_SECONDS)
 
-    # --------------------------------------------------
-    # Persist final dataset
-    # --------------------------------------------------
     with open(output_path, "w", encoding="utf-8") as f:
+
         for row in all_outputs:
+
             json.dump(row, f, ensure_ascii=False)
+
             f.write("\n")
 
     print(f"Dataset saved to: {output_path}")
 
 
 if __name__ == "__main__":
+
     main()
