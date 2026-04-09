@@ -3,7 +3,7 @@
 # ==============================================
 
 input:
-  intents_file: intents_clean.jsonl
+  intents_file: structural_intents.jsonl
 
 # ==============================================
 # Output
