@@ -1,0 +1,46 @@
+{
+  "total_intents": 583,
+  "unique_paths": 2,
+  "top_paths": [
+    [
+      [],
+      358
+    ],
+    [
+      [
+        [
+          "Neighborhood",
+          "CONTAINS",
+          "Place"
+        ]
+      ],
+      225
+    ]
+  ],
+  "start_nodes": {
+    "Neighborhood": 82,
+    "Place": 501
+  },
+  "node_coverage": {
+    "Neighborhood": 0.527,
+    "Place": 1.245
+  },
+  "relationship_usage": {
+    "CONTAINS": 225
+  },
+  "depth_distribution": {
+    "0": 358,
+    "1": 225
+  },
+  "unique_targets": 2,
+  "target_distribution": {
+    "Neighborhood": 82,
+    "Place": 501
+  },
+  "target_rate": {
+    "Neighborhood": 0.141,
+    "Place": 0.859
+  },
+  "path_entropy": 0.9621,
+  "target_entropy": 0.5859
+}
