@@ -25,63 +25,10 @@
                 "total_private_households",
                 "total_resident_population"
             ]
-        },
-        "Road": {
-            "properties": [
-                "highway",
-                "length",
-                "maxspeed",
-                "name",
-                "oneway",
-                "osmid",
-                "road_id",
-                "u",
-                "v"
-            ]
-        },
-        "Intersection": {
-            "properties": [
-                "highway",
-                "lat",
-                "lon",
-                "osmid",
-                "street_count"
-            ]
-        },
-        "Review": {
-            "properties": [
-                "author",
-                "date",
-                "place_id",
-                "place_name",
-                "rating",
-                "review_id",
-                "text"
-            ]
         }
     },
     "relationships": {
         "CONTAINS": {
-            "properties": [
-                "source"
-            ]
-        },
-        "ROAD": {
-            "properties": [
-                "length",
-                "maxspeed",
-                "name",
-                "oneway",
-                "road_id"
-            ]
-        },
-        "NEAR": {
-            "properties": [
-                "distance_m",
-                "source"
-            ]
-        },
-        "HAS_REVIEW": {
             "properties": [
                 "source"
             ]
@@ -90,31 +37,6 @@
     "allowed_patterns": [
         {
             "start": "Neighborhood",
-            "relationship": "CONTAINS",
-            "end": "Place"
-        },
-        {
-            "start": "Neighborhood",
-            "relationship": "CONTAINS",
-            "end": "Road"
-        },
-        {
-            "start": "Place",
-            "relationship": "NEAR",
-            "end": "Intersection"
-        },
-        {
-            "start": "Place",
-            "relationship": "HAS_REVIEW",
-            "end": "Review"
-        },
-        {
-            "start": "Intersection",
-            "relationship": "ROAD",
-            "end": "Intersection"
-        },
-        {
-            "start": "Road",
             "relationship": "CONTAINS",
             "end": "Place"
         }
