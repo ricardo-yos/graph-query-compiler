@@ -4,7 +4,7 @@
 base_model: mistralai/Mistral-7B-Instruct-v0.2
 tokenizer_type: mistralai/Mistral-7B-Instruct-v0.2
 
-sequence_len: 512
+sequence_len: 1024
 stop_token: "</json>"
 
 # ==============================================
@@ -15,7 +15,7 @@ dataset:
   cache_dir: data/datasets/cache
 
   data_files:
-    train: data/datasets/augmented/train_augmented.jsonl
+    train: data/datasets/splits/train_base.jsonl
     validation: data/datasets/splits/val_base.jsonl
 
   type: completion
@@ -41,34 +41,37 @@ bnb_4bit_compute_dtype: float16
 # ==============================================
 # LoRA Configuration
 # ==============================================
-lora_r: 16
-lora_alpha: 32
+lora_r: 32
+lora_alpha: 64
 lora_dropout: 0.05
 lora_bias: none
 
 target_modules:
   - q_proj
   - v_proj
+  - k_proj
+  - o_proj
 
 # ==============================================
 # Training Configuration
 # ==============================================
-num_epochs: 3
-learning_rate: 0.0002
+num_epochs: 8
+
+learning_rate: 3e-5
 
 batch_size: 1
 gradient_accumulation_steps: 16
 eval_batch_size: 1
 
-lr_scheduler: constant
-warmup_steps: 0
+lr_scheduler: cosine
+warmup_ratio: 0.05
 
 fp16: true
 bf16: false
 
 logging_steps: 10
 eval_steps: 50
-save_steps: 50
+save_steps: 100
 save_total_limit: 2
 
 optim: paged_adamw_8bit
