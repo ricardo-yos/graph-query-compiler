@@ -1,0 +1,77 @@
+{
+  "nodes": {
+    "Place": {
+      "properties": {
+        "latitude": "float",
+        "longitude": "float",
+        "name": "string",
+        "num_reviews": "int",
+        "place_id": "string",
+        "rating": "float",
+        "type": "string"
+      }
+    },
+    "Neighborhood": {
+      "properties": {
+        "area_km2": "float",
+        "average_monthly_income": "float",
+        "centroid_lat": "float",
+        "centroid_lon": "float",
+        "literacy_rate": "float",
+        "name": "string",
+        "neighborhood_id": "string",
+        "population_with_income": "int",
+        "total_literate_population": "int",
+        "total_private_households": "int",
+        "total_resident_population": "int"
+      }
+    },
+    "Road": {
+      "properties": {
+        "highway": "string",
+        "length": "float",
+        "maxspeed": "int",
+        "name": "string",
+        "oneway": "bool",
+        "osmid": "string",
+        "road_id": "string",
+        "u": "int",
+        "v": "int"
+      }
+    },
+    "Intersection": {
+      "properties": {
+        "highway": "string",
+        "lat": "float",
+        "lon": "float",
+        "osmid": "string",
+        "street_count": "int"
+      }
+    },
+    "Review": {
+      "properties": {
+        "author": "string",
+        "date": "date",
+        "place_id": "string",
+        "place_name": "string",
+        "rating": "int",
+        "review_id": "string",
+        "text": "string"
+      }
+    }
+  },
+  "relationships": {
+    "CONTAINS": {},
+    "ROAD": {},
+    "NEAR": {},
+    "HAS_REVIEW": {}
+  },
+  "patterns": [
+    ["Neighborhood", "CONTAINS", "Place"],
+    ["Neighborhood", "CONTAINS", "Road"],
+    ["Place", "NEAR", "Intersection"],
+    ["Place", "HAS_REVIEW", "Review"],
+    ["Intersection", "ROAD", "Intersection"],
+    ["Road", "CONTAINS", "Place"]
+  ]
+}
