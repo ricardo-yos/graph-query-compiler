@@ -2,145 +2,176 @@
 Graph Query Compiler
 ====================
 
-Orchestrates the full semantic query compilation pipeline for graph-based queries.
+End-to-end orchestration of the semantic query compilation pipeline.
 
-This pipeline handles:
+This module connects all stages required to transform a natural language
+question into an executable Cypher query.
 
-1. LLM prediction of an intermediate schema from a natural language question.
-2. Normalization of the schema to ensure required fields and formats.
-3. Semantic resolution, validating and refining attributes, types, and operators.
-4. Cypher query generation for execution against a graph database.
+Pipeline Overview
+-----------------
+    1. LLM Inference        → Generate structured schema from text
+    2. Normalization        → Enforce structural consistency
+    3. Validation           → Ensure semantic correctness (graph-aware)
+    4. Code Generation      → Compile schema into Cypher query
 
-Input
------
-question : str
-    Natural language user query.
+Design Principles
+-----------------
+- Clear separation of concerns between stages
+- Deterministic execution after LLM inference
+- Fail-fast validation (invalid queries are rejected early)
+- Structured outputs for debugging and observability
 
-debug : bool, optional
-    If True, prints debug information during LLM prediction (default: True).
-
-Output
-------
-dict
-    Dictionary containing:
-        - question           : Original question
-        - llm_output         : Raw schema and intent from LLM
-        - normalized_schema  : Schema after structural normalization
-        - semantic_output    : Schema after semantic resolution
-        - cypher_query       : Generated Cypher query string
+Output Contract
+---------------
+Returns a dictionary with:
+- status: "success" or "error"
+- intermediate pipeline states (LLM, normalized, validated)
+- final Cypher query (if successful)
 """
 
 from sentence_transformers import SentenceTransformer
 from src.fine_tuning.inference.run_inference import predict
 from src.compiler.normalization.normalizer import SchemaNormalizer
-from src.compiler.semantic.semantic_pipeline import SemanticResolutionPipeline
-from src.compiler.semantic.resolvers.entity_resolver import EntityResolver
-from src.compiler.semantic.resolvers.entity_type_resolver import EntityTypeResolver
-from src.compiler.semantic.resolvers.operator_semantic_resolver import OperatorSemanticResolver
+from src.compiler.validation.validator import SchemaValidator, SchemaValidationError
 from src.compiler.codegen.cypher_generator import CypherGenerator
-from copy import deepcopy
+
 import json
 
 
 class GraphQueryCompiler:
     """
-    Full orchestration of the graph query compilation pipeline.
+    Orchestrates the full semantic query compilation pipeline.
+
+    This class acts as the main entry point for converting
+    natural language into graph queries.
     """
 
     def __init__(self):
         """
-        Initialize embedding model, semantic resolvers, and the full pipeline.
+        Initialize shared resources.
+
+        Currently loads a multilingual embedding model,
+        which can be reused across future semantic steps
+        (e.g., entity resolution, similarity matching).
         """
-        # Load shared multilingual embedding model
         self.model = SentenceTransformer(
             "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
         )
 
-        # Initialize semantic resolvers
-        self.entity_resolver = EntityResolver(model=self.model)
-        self.entity_type_resolver = EntityTypeResolver(model=self.model)
-        self.operator_resolver = OperatorSemanticResolver(model=self.model)
-
-        # Compose full semantic pipeline
-        self.semantic_pipeline = SemanticResolutionPipeline(
-            entity_resolver=self.entity_resolver,
-            entity_type_resolver=self.entity_type_resolver,
-            operator_resolver=self.operator_resolver
-        )
-
     def run(self, question: str, debug: bool = True) -> dict:
         """
-        Execute the complete graph query compilation pipeline for a single question.
+        Execute the full compilation pipeline.
 
         Parameters
         ----------
         question : str
-            Natural language question to compile into a graph query.
+            Natural language query from the user
         debug : bool
-            Enable debug outputs for LLM inference (default: True).
+            Enables debug mode in LLM inference
 
         Returns
         -------
         dict
-            Complete pipeline outputs including LLM schema, normalized schema,
-            semantic resolution, and generated Cypher query.
+            Structured response containing:
+            - pipeline outputs (LLM, normalized, validated)
+            - final Cypher query (if successful)
+            - error information (if failure occurs)
         """
 
-        # -----------------------------
-        # 1 — LLM prediction
-        # -----------------------------
-        llm_output = predict(question, debug=debug)
-        schema_from_llm = llm_output.get("schema")
-        if not schema_from_llm:
-            raise ValueError("No schema returned from LLM prediction.")
+        try:
+            # -----------------------------
+            # 1 — LLM prediction
+            # -----------------------------
+            # Converts natural language into a structured schema
+            llm_output = predict(question, debug=debug)
 
-        user_intent = llm_output.get("user_intent")
+            schema_from_llm = llm_output.get("schema")
+            if not schema_from_llm:
+                raise ValueError("No schema returned from LLM prediction.")
 
-        # -----------------------------
-        # 2 — Schema normalization
-        # -----------------------------
-        normalized_schema = {
-            "user_intent": user_intent,
-            "schema": schema_from_llm
-        }
-        normalized_schema_content = SchemaNormalizer.normalize(normalized_schema)
+            user_intent = llm_output.get("user_intent")
 
-        # -----------------------------
-        # 3 — Semantic resolution
-        # -----------------------------
-        semantic_output = self.semantic_pipeline.resolve(
-            question=question,
-            llm_schema=normalized_schema_content["schema"]
-        )
+            # -----------------------------
+            # 2 — Schema normalization
+            # -----------------------------
+            # Enforces structural consistency (types, defaults, format)
+            raw_ir = {
+                "user_intent": user_intent,
+                "schema": schema_from_llm
+            }
 
-        # -----------------------------
-        # 4 — Reconstruct IR for Cypher generation
-        # -----------------------------
-        ir_for_cypher = {
-            "user_intent": user_intent,
-            "schema": semantic_output.get("resolved_schema"),
-        }
+            normalized_ir = SchemaNormalizer.normalize(raw_ir)
 
-        # -----------------------------
-        # 5 — Cypher generation
-        # -----------------------------
-        generator = CypherGenerator(ir_for_cypher)
-        cypher_query = generator.generate()
+            # -----------------------------
+            # 3 — Validation (gatekeeper)
+            # -----------------------------
+            # Ensures schema is semantically valid against graph structure
+            # Critical stage: prevents invalid queries from reaching DB
+            SchemaValidator.validate(normalized_ir)
 
-        # -----------------------------
-        # Return all outputs
-        # -----------------------------
-        return {
-            "question": question,
-            "llm_output": llm_output,
-            "normalized_schema": normalized_schema,
-            "semantic_output": semantic_output,
-            "cypher_query": cypher_query
-        }
+            # Validator is a gatekeeper → does not transform, only validates
+            validated_ir = normalized_ir
+
+            # -----------------------------
+            # 4 — Cypher generation
+            # -----------------------------
+            # Deterministically compiles schema into Cypher query
+            generator = CypherGenerator(validated_ir)
+            cypher_query = generator.generate()
+
+            # -----------------------------
+            # Return success
+            # -----------------------------
+            return {
+                "status": "success",
+                "question": question,
+                "llm_output": llm_output,
+                "normalized_schema": normalized_ir,
+                "validated_schema": validated_ir,
+                "cypher_query": cypher_query
+            }
+
+        except SchemaValidationError as e:
+            # Known failure: semantic inconsistency
+            return {
+                "status": "error",
+                "stage": "validation",
+                "message": str(e),
+                "question": question,
+                "llm_output": llm_output
+            }
+
+        except Exception as e:
+            # Unknown failure: infrastructure, inference, etc.
+            return {
+                "status": "error",
+                "stage": "unknown",
+                "message": str(e),
+                "question": question
+            }
 
 
 if __name__ == "__main__":
+    """
+    Example execution of the full pipeline.
+
+    Demonstrates:
+    - End-to-end compilation
+    - JSON output structure
+    - Pretty-printed Cypher query
+    """
     pipeline = GraphQueryCompiler()
-    question = "Quais os petshops do bairro Jardim que possuem nota acima de 4?"
+
+    question = "Quais clinicas veterinárias possuem nota acima de 4?"
+
     output = pipeline.run(question)
+
+    # Full structured output (debugging / logging)
     print(json.dumps(output, indent=2, ensure_ascii=False))
+
+    # Pretty print Cypher query
+    if output.get("status") == "success":
+        print("\n" + "="*50)
+        print("Cypher Query:\n")
+        print(output["cypher_query"])
+        print("="*50)
