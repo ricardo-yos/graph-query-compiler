@@ -225,3 +225,108 @@ pip install -e ".[all]"
 ```
 
 ---
+
+## Project Structure
+
+```text
+graph-query-compiler/
+│
+├── src/
+│   ├── compiler/                  # Core query compilation pipeline
+│   │   ├── codegen/
+│   │   │   └── cypher_generator.py
+│   │   ├── normalization/
+│   │   │   └── normalizer.py
+│   │   ├── validation/
+│   │   │   └── validator.py
+│   │   └── query_compiler.py
+│   │
+│   ├── config/                   # Configuration files
+│   │   ├── datasets/
+│   │   │   └── generation.yaml
+│   │   ├── fine_tuning/
+│   │   │   ├── inference/
+│   │   │   │   └── inference_config.yaml
+│   │   │   └── training/
+│   │   │       └── qlora_config.yaml
+│   │   ├── graph/
+│   │   │   ├── graph_schema.json
+│   │   │   └── schema_loader.py
+│   │   ├── intents/
+│   │   │   ├── combinatorial.yaml
+│   │   │   └── regime_types.yaml
+│   │   ├── env_loader.py
+│   │   └── paths.py
+│   │
+│   ├── datasets/                 # Dataset generation and splitting
+│   │   ├── generation/
+│   │   │   └── distilabel_pipeline.py
+│   │   └── splitting/
+│   │       └── structural_split.py
+│   │
+│   ├── fine_tuning/              # Model training and inference
+│   │   ├── inference/
+│   │   │   └── run_inference.py
+│   │   └── training/
+│   │       └── train_qlora.py
+│   │
+│   └── intents/                  # Intent generation and validation
+│       ├── dataset/
+│       │   └── build_structural_dataset.py
+│       ├── dataset_curation/
+│       │   └── semantic_bucket_selector.py
+│       ├── generation/
+│       │   ├── policies/
+│       │   │   ├── aggregate_policy.py
+│       │   │   ├── filter_policy.py
+│       │   │   ├── numeric_policy.py
+│       │   │   ├── operator_policy.py
+│       │   │   ├── order_policy.py
+│       │   │   ├── path_policy.py
+│       │   │   ├── return_policy.py
+│       │   │   └── value_policy.py
+│       │   ├── utils/
+│       │   │   ├── attribute_utils.py
+│       │   │   └── path_utils.py
+│       │   ├── combinatorial_generator.py
+│       │   ├── graph_schema_adapter.py
+│       │   ├── intent_models.py
+│       │   └── structural_config.py
+│       ├── reports/
+│       │   ├── generate_structural_reports.py
+│       │   ├── path_coverage_report.py
+│       │   └── save_report.py
+│       └── validation/
+│           ├── intent_semantic_rules.py
+│           └── intent_validator.py
+│
+├── data/                         # Generated data and artifacts
+│   ├── datasets/
+│   │   ├── base/
+│   │   │   └── questions_base.jsonl
+│   │   └── splits/
+│   │       ├── train_base.jsonl
+│   │       └── val_base.jsonl
+│   ├── intents/
+│   │   └── structural_intents.jsonl
+│   ├── reports/
+│   │   └── path_coverage_report.json
+│   └── schema/
+│       ├── graph_schema.json
+│       └── graph_schema_full_reference.json
+│
+├── docs/                         # Documentation and articles
+│   └── article_graph_query_compiler.md
+│
+├── pyproject.toml
+├── README.md
+└── LICENSE
+```
+
+---
+
+## Documentation
+
+For a detailed explanation of the architecture, design decisions, and theoretical foundations of the project, see:
+
+- [Technical Article](docs/article_graph_query_compiler.md)
