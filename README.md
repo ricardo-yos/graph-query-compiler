@@ -174,3 +174,54 @@ Fine-tunes the model to map questions to structured schemas.
 Converts validated intent schemas into executable graph queries (e.g., Cypher, SQL, Gremlin).
 
 ---
+
+## Quickstart
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/ricardo-yos/graph-query-compiler
+cd graph-query-compiler
+```
+
+### 2. Install dependencies
+
+Production install:
+```bash
+pip install .
+```
+
+Development / full environment (recommended):
+```bash
+pip install -e ".[all]"
+```
+
+### 3. Data Preparation Pipeline (Intents → Dataset → Split)
+
+```bash
+python -m src.intents.dataset.build_structural_dataset
+python -m src.datasets.generation.distilabel_pipeline
+python -m src.datasets.splitting.structural_split
+```
+
+### 4. Train model (QLoRA fine-tuning)
+
+```bash
+python -m src.fine_tuning.training.train_qlora
+```
+
+### 5. Run inference (query compiler)
+
+```bash
+python -m src.compiler.query_compiler
+```
+
+## Recommended Setup
+
+For full reproducibility:
+
+```bash
+pip install -e ".[all]"
+```
+
+---
