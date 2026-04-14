@@ -1,0 +1,86 @@
+[project]
+name = "graph-query-compiler"
+version = "0.1.0"
+description = "Semantic Graph Query Compiler using LLMs"
+readme = "README.md"
+requires-python = ">=3.10"
+
+license = { file = "LICENSE" }
+
+# --------------------------------------------------
+# Core dependencies (required for inference/runtime)
+# --------------------------------------------------
+dependencies = [
+    "numpy>=2.2.0",
+    "pandas>=2.3.0",
+    "pydantic>=2.12.0",
+    "python-dotenv>=1.1.0",
+    "pyyaml>=6.0.0",
+    "scikit-learn>=1.7.0",
+    "tqdm>=4.65.0",
+
+    # NLP / LLM stack (required for inference)
+    "torch>=2.1.0",
+    "transformers>=4.40.0",
+    "sentence-transformers>=5.0.0",
+]
+
+# --------------------------------------------------
+# Optional dependencies (feature-specific)
+# --------------------------------------------------
+[project.optional-dependencies]
+
+# Fine-tuning and training (QLoRA, adapters, etc.)
+training = [
+    "peft>=0.18.0",
+    "accelerate>=0.20.0",
+    "datasets>=2.20.0",
+    "bitsandbytes>=0.43.0"
+]
+
+# Dataset generation / labeling pipelines
+data = [
+    "distilabel==1.5.3"
+]
+
+# Development tools (testing, formatting, notebooks)
+dev = [
+    "pytest>=7.0.0",
+    "black",
+    "ruff",
+    "ipykernel"
+]
+
+# Full installation (includes all optional dependencies)
+all = [
+    # training stack
+    "peft>=0.18.0",
+    "accelerate>=0.20.0",
+    "datasets>=2.20.0",
+    "bitsandbytes>=0.43.0",
+
+    # data pipeline
+    "distilabel==1.5.3",
+
+    # development tools
+    "pytest>=7.0.0",
+    "black",
+    "ruff",
+    "ipykernel"
+]
+
+# --------------------------------------------------
+# Build system configuration
+# --------------------------------------------------
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+# --------------------------------------------------
+# Package discovery (src/ layout)
+# --------------------------------------------------
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
