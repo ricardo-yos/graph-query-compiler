@@ -1,10 +1,14 @@
 # Graph Query Compiler
 
-**Graph Query Compiler (GQC)** is a structured reasoning interface between natural language and knowledge graphs.
+**From natural language to reliable graph queries — with structured reasoning.**
+
+Graph Query Compiler (GQC) bridges natural language and graph query languages through structured reasoning.
 
 It compiles natural language questions into explicit, executable graph query schemas, enabling reliable and interpretable reasoning over structured data.
 
-Instead of directly generating answers from text, the model learns to produce an intermediate semantic representation describing:
+GQC reframes query generation as a **structured prediction problem over graph schemas**.
+
+Instead of directly generating answers, the model produces an intermediate semantic representation describing:
 
 - entities
 - relationships
@@ -16,27 +20,101 @@ This representation can be deterministically translated into graph query languag
 
 ---
 
+## Example
+
+**Natural language question:**
+
+```text
+Which veterinary clinics have rating above 4?
+```
+
+**Intermediate representation (simplified):**
+
+```json
+{
+  "filters": [
+    {"attribute": "rating", "operator": ">", "value": 4},
+    {"attribute": "type", "operator": "=", "value": "veterinary_care"}
+  ],
+  "target": "Place",
+  "return": ["name"]
+}
+```
+
+**Generated Cypher:**
+
+```cypher
+MATCH (p:Place)
+WHERE p.rating > 4
+  AND p.type = 'veterinary_care'
+RETURN p.name AS name
+```
+
+**Pipeline output:**
+
+```json
+{
+  "status": "success",
+  "question": "Which veterinary clinics have rating above 4?",
+  "cypher_query": "MATCH (p:Place) WHERE p.rating > 4 AND p.type = 'veterinary_care' RETURN p.name AS name"
+}
+```
+
+---
+
+## Why this matters
+
+Most LLM-based systems generate queries as plain text, which leads to:
+
+- brittle outputs
+- lack of validation
+- unpredictable behavior in production
+
+Graph Query Compiler introduces a structured intermediate layer, turning query generation into a deterministic and verifiable process.
+
+This makes it suitable for real-world systems where reliability matters, especially in production environments involving structured data.
+
+---
+
+## Use Cases
+
+- Natural language interfaces for graph databases
+- Business intelligence over structured data
+- Semantic search over knowledge graphs
+- Query generation for Neo4j / SQL systems
+- Assistive analytics tools
+
+---
+
+## Key Features
+
+- Structured intermediate representation (IR)
+- Deterministic query generation
+- Schema-aware validation
+- Support for multi-hop graph queries
+- Modular pipeline (generation → validation → compilation)
+
+---
+
 ## Motivation  
 
-Large Language Models (LLMs) are powerful but often face limitations when applied to structured reasoning tasks:
+Large Language Models (LLMs) are powerful but often struggle with structured reasoning tasks:
 
 - hallucinated facts
 - lack of interpretability
-- weak control over structural constraints
+- weak control over constraints
 - difficulty performing multi-hop reasoning
-- limited reliability in compositional queries
 
-Graph Query Compiler addresses these limitations by introducing an explicit intermediate reasoning layer between natural language and executable graph queries.
+Graph Query Compiler addresses these limitations by introducing an explicit intermediate reasoning layer.
 
-Instead of optimizing the model to directly produce answers, GQC optimizes the model to produce structured reasoning steps that can be validated and executed.
+Instead of generating answers directly, the model produces structured reasoning steps that can be validated and executed.
 
-By forcing the model to produce structured representations, GQC:
+This approach:
 
-- improves reliability of generated queries
-- enables deterministic execution on knowledge graphs
-- makes reasoning interpretable and inspectable
+- improves reliability
+- enables deterministic execution
+- makes reasoning inspectable
 - encourages compositional generalization
-- reduces dependence on memorization of specific questions
 
 ---
 
@@ -44,11 +122,7 @@ By forcing the model to produce structured representations, GQC:
 
 Graph Query Compiler treats query generation as a program synthesis problem:
 
-Natural language questions are compiled into structured intent schemas that describe the semantic structure of the query.
-
-These schemas can then be translated into executable graph queries.
-
-Pipeline overview:
+Natural language questions are compiled into structured schemas that describe the semantic structure of the query.
 
 ```text
 Natural Language Question
@@ -64,70 +138,9 @@ Grounded Answer
 
 ---
 
-## Example
-
-The following example illustrates the full pipeline from natural language to executable query:
-
-Natural language question:
-
-```text
-Which veterinary clinics have rating above 4?
-```
-
-Generated intent schema:
-
-```json
-{
-  "user_intent": "retrieve",
-  "schema": {
-    "aggregate": null,
-    "filters": [
-      {
-        "attribute": "rating",
-        "node_label": "Place",
-        "operator": ">",
-        "value_float": null,
-        "value_int": 4,
-        "value_str": null
-      },
-      {
-        "attribute": "type",
-        "node_label": "Place",
-        "operator": "=",
-        "value_float": null,
-        "value_int": null,
-        "value_str": "veterinary_care"
-      }
-    ],
-    "limit": null,
-    "order_by": null,
-    "path": [],
-    "return_attributes": [
-      "name"
-    ],
-    "target": {
-      "label": "Place"
-    }
-  }
-}
-```
-
-Compiled graph query (Cypher):
-
-```cypher
-MATCH (p:Place)
-WHERE p.rating > 4
-  AND p.type = "veterinary_care"
-RETURN p.name AS name
-```
-
----
-
 ## Architecture
 
-Graph Query Compiler is organized as a modular pipeline separating structural reasoning from language generation.
-
-High-level flow:
+Graph Query Compiler is organized as a modular pipeline:
 
 ```text
 Graph Schema Definition
@@ -149,29 +162,7 @@ Schema Compilation
 Graph Query Execution
 ```
 
-This pipeline separates structure generation, validation, and execution, ensuring that each stage can be independently controlled and improved.
-
----
-
-## Key Components
-
-### Intent Schema
-Structured representation describing the semantic structure of a query, including entities, filters, constraints, and expected outputs.
-
-### Structural Generator
-Generates valid combinations of entities, relationships, and constraints based on the underlying graph schema.
-
-### Semantic Validator
-Applies rules to ensure generated intents are logically consistent and compatible with the graph schema.
-
-### Question Generator
-Transforms structured intents into natural language questions.
-
-### Training Pipeline
-Fine-tunes the model to map questions to structured schemas.
-
-### Query Compiler
-Converts validated intent schemas into executable graph queries (e.g., Cypher, SQL, Gremlin).
+Each stage is independently controlled, enabling extensibility and debugging.
 
 ---
 
@@ -196,7 +187,7 @@ Development / full environment (recommended):
 pip install -e ".[all]"
 ```
 
-### 3. Data Preparation Pipeline (Intents → Dataset → Split)
+### 3. Data preparation pipeline (Intents → Dataset → Split)
 
 ```bash
 python -m src.intents.dataset.build_structural_dataset
@@ -216,117 +207,32 @@ python -m src.fine_tuning.training.train_qlora
 python -m src.compiler.query_compiler
 ```
 
-## Recommended Setup
-
-For full reproducibility:
-
-```bash
-pip install -e ".[all]"
-```
-
 ---
 
 ## Project Structure
 
+High-level overview of the system architecture:
+
 ```text
-graph-query-compiler/
-│
-├── src/
-│   ├── compiler/                  # Core query compilation pipeline
-│   │   ├── codegen/
-│   │   │   └── cypher_generator.py
-│   │   ├── normalization/
-│   │   │   └── normalizer.py
-│   │   ├── validation/
-│   │   │   └── validator.py
-│   │   └── query_compiler.py
-│   │
-│   ├── config/                   # Configuration files
-│   │   ├── datasets/
-│   │   │   └── generation.yaml
-│   │   ├── fine_tuning/
-│   │   │   ├── inference/
-│   │   │   │   └── inference_config.yaml
-│   │   │   └── training/
-│   │   │       └── qlora_config.yaml
-│   │   ├── graph/
-│   │   │   ├── graph_schema.json
-│   │   │   └── schema_loader.py
-│   │   ├── intents/
-│   │   │   ├── combinatorial.yaml
-│   │   │   └── regime_types.yaml
-│   │   ├── env_loader.py
-│   │   └── paths.py
-│   │
-│   ├── datasets/                 # Dataset generation and splitting
-│   │   ├── generation/
-│   │   │   └── distilabel_pipeline.py
-│   │   └── splitting/
-│   │       └── structural_split.py
-│   │
-│   ├── fine_tuning/              # Model training and inference
-│   │   ├── inference/
-│   │   │   └── run_inference.py
-│   │   └── training/
-│   │       └── train_qlora.py
-│   │
-│   └── intents/                  # Intent generation and validation
-│       ├── dataset/
-│       │   └── build_structural_dataset.py
-│       ├── dataset_curation/
-│       │   └── semantic_bucket_selector.py
-│       ├── generation/
-│       │   ├── policies/
-│       │   │   ├── aggregate_policy.py
-│       │   │   ├── filter_policy.py
-│       │   │   ├── numeric_policy.py
-│       │   │   ├── operator_policy.py
-│       │   │   ├── order_policy.py
-│       │   │   ├── path_policy.py
-│       │   │   ├── return_policy.py
-│       │   │   └── value_policy.py
-│       │   ├── utils/
-│       │   │   ├── attribute_utils.py
-│       │   │   └── path_utils.py
-│       │   ├── combinatorial_generator.py
-│       │   ├── graph_schema_adapter.py
-│       │   ├── intent_models.py
-│       │   └── structural_config.py
-│       ├── reports/
-│       │   ├── generate_structural_reports.py
-│       │   ├── path_coverage_report.py
-│       │   └── save_report.py
-│       └── validation/
-│           ├── intent_semantic_rules.py
-│           └── intent_validator.py
-│
-├── data/                         # Generated data and artifacts
-│   ├── datasets/
-│   │   ├── base/
-│   │   │   └── questions_base.jsonl
-│   │   └── splits/
-│   │       ├── train_base.jsonl
-│   │       └── val_base.jsonl
-│   ├── intents/
-│   │   └── structural_intents.jsonl
-│   ├── reports/
-│   │   └── path_coverage_report.json
-│   └── schema/
-│       ├── graph_schema.json
-│       └── graph_schema_full_reference.json
-│
-├── docs/                         # Documentation and articles
-│   └── article_graph_query_compiler.md
-│
-├── pyproject.toml
-├── README.md
-└── LICENSE
+src/
+├── compiler/        # Core query compilation pipeline (IR → Cypher)
+├── intents/         # Intent generation and semantic validation
+├── datasets/        # Dataset generation and preprocessing
+├── fine_tuning/     # Model training and inference (QLoRA)
+├── config/          # Configuration, schema, and environment
 ```
 
 ---
 
 ## Documentation
 
-For a detailed explanation of the architecture, design decisions, and theoretical foundations of the project, see:
+For a deeper explanation of the design and theoretical motivation:
 
 - [Technical Article](docs/article_graph_query_compiler.md)
+
+---
+
+## Status
+
+Research prototype with a fully working end-to-end pipeline:
+natural language → structured schema → executable Cypher query.
