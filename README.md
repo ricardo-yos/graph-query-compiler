@@ -107,9 +107,9 @@ Large Language Models (LLMs) are powerful but often struggle with structured rea
 
 Graph Query Compiler addresses these limitations by introducing an explicit intermediate reasoning layer.
 
-Instead of generating answers directly, the model produces structured reasoning steps that can be validated and executed.
+This intermediate representation makes it possible to validate, constrain, and execute reasoning steps before they are expressed in natural language.
 
-This approach:
+As a result, the system:
 
 - improves reliability
 - enables deterministic execution
