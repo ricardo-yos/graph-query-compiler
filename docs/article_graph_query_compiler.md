@@ -209,3 +209,30 @@ The use of structured representations provides several advantages:
 Furthermore, the high-quality dataset produced by the GQC pipeline—characterized by structural consistency, semantic validity, and balanced coverage—enables more reliable learning compared to datasets derived from noisy or weakly supervised sources.
 
 As a result, the adapted model is better equipped to perform accurate and consistent natural language to query translation, forming a critical component of the overall system.
+
+### 3.6 Query Compilation
+
+In the final stage of the pipeline, structured query representations are transformed into executable graph queries. This process, referred to as query compilation, maps the inferred intent (`intent` + `schema_spec`) into a concrete query language such as Cypher.
+
+The compilation process operates deterministically over the structured representation, translating each component of the schema specification into its corresponding query construct. This includes:
+
+* mapping target nodes to MATCH clauses
+* translating relationship paths into graph traversals
+* converting filter conditions into WHERE clauses
+* applying ordering and limits where specified
+* handling aggregation operations when present
+
+Because the input representation is already validated and schema-consistent, the compilation step does not require ambiguity resolution or complex inference. Instead, it follows a rule-based transformation process that ensures correctness and reproducibility.
+
+This design separates query generation from query execution. Rather than relying on language models to directly produce executable queries, the system delegates this responsibility to a deterministic compiler that operates over a structured intermediate representation.
+
+This separation provides several advantages:
+
+* **Reliability**: Generated queries are guaranteed to be syntactically and structurally valid.
+* **Transparency**: The transformation from intent to query can be inspected and audited.
+* **Maintainability**: Changes to the query language or schema can be handled at the compiler level.
+* **Error Isolation**: Failures can be traced back to either the prediction stage or the compilation stage.
+
+Furthermore, this approach mitigates common failure modes of language models, such as producing invalid or inconsistent queries, by removing direct dependency on free-form text generation for executable outputs.
+
+As a result, the system ensures that all executable queries are derived from validated, interpretable, and schema-aligned representations, completing the end-to-end pipeline from natural language input to reliable query execution.
