@@ -158,3 +158,31 @@ This separation improves modularity and maintainability, allowing domain knowled
 By combining schema-level consistency checks with rule-based semantic validation, the system ensures that all accepted intents are coherent, interpretable, and suitable for downstream tasks such as dataset construction and model training.
 
 Unlike purely generative approaches, where invalid outputs must be corrected or discarded post hoc, this method integrates validation as a first-class filtering stage. As a result, correctness is not assumed but systematically enforced before any downstream use.
+
+### 3.4 Dataset Construction
+
+Once validated intents are obtained, the system constructs a supervised dataset by pairing structured query representations with their corresponding natural language expressions.
+
+Each data sample consists of a tuple:
+
+- natural language query
+- structured intent representation (`intent` + `schema_spec`)
+
+This pairing establishes a direct mapping between linguistic input and structured query semantics, enabling the training of models for natural language to query translation.
+
+Natural language expressions are generated based on the underlying intent representation, ensuring that each query accurately reflects the structure and semantics encoded in the corresponding schema specification. This preserves alignment between form (language) and meaning (query structure), which is critical for downstream learning tasks.
+
+The quality of the resulting dataset is directly influenced by the generation and validation processes. Since all intents are constructed within a schema-constrained space, guided by structural regimes and field-level policies, and filtered through a semantic validation layer, the dataset inherits strong guarantees of consistency, coherence, and validity.
+
+In addition, the semantic balancing strategy applied during intent generation ensures that the dataset maintains a diverse distribution of query patterns. This prevents overrepresentation of specific structures and promotes broader coverage across different query types and complexity levels.
+
+As a result, the constructed dataset provides:
+
+* high structural diversity across query patterns
+* balanced representation of complexity levels
+* strong alignment between natural language and structured queries
+* elimination of invalid or incoherent samples
+
+Unlike datasets derived from raw text or weak supervision, this approach produces high-quality training data with explicit structural grounding and minimal noise.
+
+This dataset serves as the foundation for model adaptation, enabling language models to learn accurate mappings from natural language inputs to structured query representations.
