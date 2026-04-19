@@ -186,3 +186,26 @@ As a result, the constructed dataset provides:
 Unlike datasets derived from raw text or weak supervision, this approach produces high-quality training data with explicit structural grounding and minimal noise.
 
 This dataset serves as the foundation for model adaptation, enabling language models to learn accurate mappings from natural language inputs to structured query representations.
+
+### 3.5 Model Adaptation
+
+The dataset constructed from validated intents is used to adapt language models to the task of mapping natural language queries to structured query representations.
+
+This adaptation is performed through supervised fine-tuning, where the model learns to predict structured intents (`intent` + `schema_spec`) given a natural language input. The objective is to enable accurate schema inference from user queries, bridging the gap between unstructured language and executable query logic.
+
+During training, each sample provides a direct alignment between a natural language expression and its corresponding structured representation. This explicit supervision allows the model to learn compositional mappings between linguistic patterns and query components, such as entities, attributes, filters, and operators.
+
+Unlike standard language modeling, which relies on implicit pattern learning, this approach introduces a structured prediction task where correctness can be explicitly evaluated at the level of the generated intent.
+
+At inference time, the fine-tuned model receives a natural language query and predicts the corresponding structured representation. This predicted intent serves as an intermediate, interpretable form that can be validated and compiled into an executable query.
+
+The use of structured representations provides several advantages:
+
+* **Interpretability**: The predicted intent can be inspected and analyzed before execution.
+* **Controllability**: Errors can be identified and corrected at the structural level.
+* **Modularity**: The system decouples language understanding from query execution.
+* **Robustness**: The model operates within a schema-constrained space, reducing invalid outputs.
+
+Furthermore, the high-quality dataset produced by the GQC pipeline—characterized by structural consistency, semantic validity, and balanced coverage—enables more reliable learning compared to datasets derived from noisy or weakly supervised sources.
+
+As a result, the adapted model is better equipped to perform accurate and consistent natural language to query translation, forming a critical component of the overall system.
