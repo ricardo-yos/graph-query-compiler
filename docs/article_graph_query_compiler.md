@@ -107,6 +107,8 @@ Intent generation in GQC is performed through a schema-driven combinatorial pipe
 
 The objective is to systematically construct structured query representations (`intent` + `schema_spec`) through controlled combinations of traversal paths and structural components, while ensuring both diversity and structural correctness.
 
+To facilitate controlled experimentation, the generation process is conducted over a simplified graph schema. This allows the evaluation of the core pipeline—particularly intent generation, validation, and compilation—without interference from domain-specific complexities. The framework, however, is designed to generalize to richer schemas as future work.
+
 #### Combinatorial Construction
 
 The generation process involves exploring graph traversal paths with varying depths and composing operators such as filtering, aggregation, and ordering.
