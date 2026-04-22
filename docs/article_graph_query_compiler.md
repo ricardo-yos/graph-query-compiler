@@ -252,3 +252,47 @@ This separation provides several advantages:
 Furthermore, this approach mitigates common failure modes of language models, such as producing invalid or inconsistent queries, by removing direct dependency on free-form text generation for executable outputs.
 
 As a result, the system ensures that all executable queries are derived from validated, interpretable, and schema-aligned representations, completing the end-to-end pipeline from natural language input to reliable query execution.
+
+## 4. Discussion
+
+### 4.1 Observed Strengths of the Model
+
+The proposed approach demonstrates strong performance in scenarios where query structure aligns with patterns observed during training, particularly in generating accurate structured representations from familiar inputs.
+
+The following strengths were observed:
+
+1. **Structural Consistency**  
+The model consistently produces structurally coherent outputs that adhere to the underlying graph schema. Generated intents correctly identify target nodes, attribute-based filters, and operators, reflecting the effectiveness of the schema-driven generation process and the validation mechanisms embedded in the pipeline.
+
+2. **Robustness Within the Domain**  
+The model maintains stable behavior across a range of query types supported by the schema. This includes handling multi-attribute filtering and basic relational patterns when expressed in familiar linguistic forms, demonstrating robustness within the defined domain.
+
+3. **Accurate Mapping of Learned Patterns**  
+When input queries follow known syntactic and semantic patterns, the model reliably maps them to correct structured representations. This indicates strong alignment between the training data and the learned mappings.
+
+4. **Structural Generalization**  
+The model is capable of combining known structural components—such as filters and operators—in novel ways. While it may struggle with diverse linguistic expressions, this suggests that the model has learned aspects of the underlying query structure, although its linguistic generalization remains limited.
+
+5. **Reliability Through Controlled Generation**  
+The integration of validation and controlled generation contributes to the overall reliability of the system, reducing the likelihood of producing invalid or incoherent query representations.
+
+### 4.2 Challenges in Intent Dataset Generation
+
+Constructing high-quality datasets for mapping natural language queries to structured graph representations presents several fundamental challenges. These challenges arise from the combinatorial nature of query structures, the need for semantic coherence, and the difficulty of aligning structured representations with natural language expressions.
+
+1. **Combinatorial Explosion of Query Structures**  
+The combinatorial explosion of possible query structures is one of the primary challenges in dataset construction. Given a graph schema with multiple nodes, attributes, relationships, and operators, the number of possible query combinations grows rapidly as traversal depth and structural complexity increase. Naively enumerating all possible combinations leads to an intractable search space, making controlled generation essential.
+
+2. **Structural vs. Semantic Validity**  
+Another key challenge is the distinction between structural and semantic validity. A query may be structurally consistent with the schema—using valid nodes, attributes, and relationships—yet still be semantically meaningless or unrealistic in practice. For example, certain combinations of attributes and operators may not correspond to plausible user intents, requiring an additional layer of semantic validation beyond structural correctness.
+
+3. **Distribution Imbalance**  
+Imbalance in the distribution of generated queries also presents a significant challenge. Unconstrained generation tends to favor simpler or more common query patterns, leading to datasets that underrepresent more complex or less frequent structures. This imbalance can negatively impact model training, as the model may become biased toward specific query types.
+
+4. **Natural Language Alignment**  
+Aligning structured representations with natural language expressions is inherently challenging. A single structured query may correspond to multiple valid linguistic expressions, while similar natural language queries may map to different underlying structures. Ensuring consistent and meaningful alignment between these representations is critical for supervised learning.
+
+5. **Lack of High-quality Ground Truth Data**  
+A key challenge in dataset construction is the lack of reliable ground truth data. Creating accurate pairs of natural language queries and their corresponding structured representations requires manual annotation, which is time-consuming, error-prone, and difficult to scale, especially for complex graph schemas. As a result, many existing approaches rely on automatically generated or weakly supervised data, which may introduce noise and inconsistencies that negatively affect model performance.
+
+These challenges motivate the need for controlled, schema-aware, and semantically grounded dataset construction methods, as realized in the GQC framework.
