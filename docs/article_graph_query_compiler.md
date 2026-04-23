@@ -4,101 +4,122 @@
 
 Generating accurate structured queries from natural language remains a challenging problem, particularly in graph-based systems where queries must satisfy both structural and semantic constraints. Existing approaches often rely on large language models or weakly supervised data, which can lead to inconsistencies, invalid query structures, and limited controllability.
 
-In this work, we introduce the Graph Query Compiler (GQC), a modular framework for controlled generation of structured graph queries. The proposed approach decomposes the problem into distinct stages, including schema-driven intent generation, dataset construction, model adaptation, and query compilation. Central to the framework is a combinatorial generation process guided by structural regimes and field-level policies, enabling systematic exploration of valid query structures while limiting combinatorial explosion. A semantic validation layer further enforces structural and semantic consistency.
+This document describes the Graph Query Compiler (GQC), an experimental modular framework for controlled generation of structured graph queries. The system decomposes the problem into distinct stages, including schema-driven intent generation, dataset construction, model adaptation, and query compilation. Central to the framework is a combinatorial generation process guided by structural regimes and field-level policies, enabling systematic exploration of valid query structures while controlling combinatorial growth. A semantic validation layer is used to enforce structural and semantic consistency throughout the pipeline.
 
-This work focuses on the design and analysis of a controlled framework for structured query generation, rather than on comprehensive empirical benchmarking. Preliminary qualitative observations suggest that the approach enables the construction of structurally consistent datasets and reliable intermediate representations, while also highlighting limitations in linguistic generalization.
-
-These findings indicate that enforcing structure and control during dataset generation and query construction is a promising direction for improving natural language interfaces to graph databases.
+This work focuses on the design and analysis of a controlled framework for structured query generation, rather than on comprehensive empirical benchmarking or finalized evaluation. Preliminary observations from early experiments suggest that the approach can produce structurally consistent query representations and well-formed intermediate abstractions, while also exposing limitations in linguistic generalization and robustness to paraphrased inputs.
 
 ## 1. Introduction
 
 Large language models (LLMs) have demonstrated strong capabilities in generating fluent and contextually coherent text. However, their ability to perform structured reasoning over constrained domains remains limited. Tasks that require consistency with an underlying schema—such as graph query generation—often expose these limitations, as models may produce outputs that are syntactically plausible but semantically invalid. Even when LLMs appear to perform reasoning, this process remains largely implicit and does not reliably enforce domain-specific constraints.
 
-These limitations become critical in scenarios where multiple attributes, relationships, and filtering conditions must be composed while preserving structural validity. In such cases, LLMs frequently generate outputs that violate schema constraints, introduce incompatible attribute combinations, or misalign the intended query structure with its natural language representation.
+These limitations become more critical in scenarios where multiple attributes, relationships, and filtering conditions must be composed while preserving structural validity. In such cases, LLMs frequently generate outputs that violate schema constraints, introduce incompatible attribute combinations, or misalign the intended query structure with its natural language representation.
 
-Approaches that rely solely on language modeling cannot reliably enforce structural constraints. As a result, they often produce inconsistent or semantically invalid outputs, limiting their effectiveness in tasks such as semantic parsing, dataset generation, and natural language interfaces over structured data systems.
+Approaches that rely solely on language modeling cannot reliably enforce structural constraints. As a result, they often produce inconsistent or semantically invalid outputs, limiting their effectiveness in tasks such as semantic parsing, dataset construction, and natural language interfaces over structured data systems.
 
-To address this gap, we propose the Graph Query Compiler (GQC), a partially deterministic pipeline that separates structural reasoning from linguistic realization. The system first generates candidate query intents through controlled combinatorial processes and enforces schema consistency via a semantic validation layer, before mapping these validated structures into natural language. By enforcing structural correctness prior to language generation, GQC mitigates common failure modes of LLMs and enables the creation of high-quality, semantically consistent datasets.
+To address this gap, we propose the Graph Query Compiler (GQC), an experimental partially deterministic pipeline that separates structural reasoning from linguistic realization. The system generates candidate query intents through controlled combinatorial processes and enforces schema consistency via a semantic validation layer, before mapping these validated structures into natural language. By enforcing structural correctness prior to language generation, GQC aims to reduce common failure modes of LLM-based approaches and support the construction of more consistent structured datasets.
 
-This approach provides a more reliable foundation for tasks that depend on structured reasoning, while preserving the expressive flexibility of natural language.
+This approach is intended to provide a more reliable foundation for tasks that depend on structured reasoning, while still preserving the expressive flexibility of natural language.
 
-This work focuses on the design, formalization, and analysis of a controlled framework for structured query generation, rather than on comprehensive empirical evaluation or state-of-the-art performance. The goal is to establish a reliable foundation for future empirical studies by explicitly addressing structural validity, semantic consistency, and controllability in query construction.
+This document focuses on the design, formalization, and analysis of a controlled framework for structured query generation, rather than on comprehensive empirical evaluation or benchmark results. The goal is to explore mechanisms for improving structural validity, semantic consistency, and controllability in query construction, based on early experimental observations.
 
-Prior work in semantic parsing and text-to-query generation has explored mapping natural language to structured representations, often relying on neural models or weak supervision. In contrast, this work emphasizes explicit structural control through schema-driven combinatorial generation and rule-based validation, focusing on enforcing correctness prior to language generation.
+Prior work in semantic parsing and text-to-query generation has explored mapping natural language to structured representations, often relying on neural models or weak supervision. In contrast, this work emphasizes explicit structural control through schema-driven combinatorial generation and rule-based validation, with the objective of enforcing correctness prior to language generation in an experimental setting.
 
 ## 2. Contributions
 
 The main contributions of this work are as follows:
 
 1. **A Schema-driven Framework for Structured Query Generation**  
-We propose the Graph Query Compiler (GQC), a modular framework that formulates natural language to graph query translation as a structured, schema-aware generation problem, explicitly separating structural reasoning from linguistic realization.
+We describe the Graph Query Compiler (GQC), a modular framework that models natural language to graph query translation as a schema-aware structured generation problem, explicitly separating structural reasoning from linguistic realization.
 
 2. **Controlled Combinatorial Intent Generation**  
-We introduce a deterministic, schema-driven approach to intent generation based on structural regimes and field-level policies, enabling systematic exploration of valid query structures while controlling combinatorial complexity.
+We introduce a deterministic, schema-driven approach to intent generation based on structural regimes and field-level policies, enabling systematic exploration of valid query structures while controlling combinatorial growth.
 
 3. **Multi-level Constraint Mechanism**  
-We design a layered constraint system that combines high-level structural regimes with fine-grained field-level policies, providing explicit control over query composition and ensuring structural and semantic coherence.
+We design a layered constraint system that combines high-level structural regimes with fine-grained field-level policies, providing explicit control over query composition and supporting structural and semantic consistency during generation.
 
 4. **Semantic Validation as a First-class Component**  
-We formalize a rule-based semantic validation layer that operates independently of generation, enforcing domain constraints and filtering invalid or unrealistic query representations prior to downstream use.
+We define a rule-based semantic validation layer that operates independently of generation, enforcing domain constraints and filtering invalid or inconsistent query representations before downstream processing.
 
-5. **A Modular Pipeline for Reliable Query Construction**  
-We present a modular architecture that decomposes the process into intent generation, dataset construction, model adaptation, and query compilation, enabling interpretability, controllability, and separation of concerns across stages.
+5. **A Modular Pipeline for Structured Query Construction**  
+We present a modular architecture that decomposes the process into intent generation, dataset construction, model adaptation, and query compilation, enabling separation of concerns and interpretability across stages of the pipeline.
 
 6. **Analysis of Challenges in Intent Dataset Construction**  
-We provide a structured analysis of the key challenges involved in generating high-quality datasets for structured query learning, including combinatorial explosion, semantic validity, distribution imbalance, and linguistic alignment.
+We outline key challenges observed during dataset construction for structured query learning, including combinatorial explosion, semantic ambiguity, distribution imbalance, and alignment between natural language and structured representations.
 
 7. **Preliminary Analysis of Structural vs. Linguistic Generalization**  
-Through preliminary observations, we highlight a key limitation of current approaches: while structural generalization can be achieved through controlled generation, linguistic generalization remains a significant challenge, motivating future work on data augmentation and paraphrasing.
+Early experimental observations suggest that while structural generalization can be achieved through controlled generation, linguistic generalization remains challenging, particularly under paraphrased or distribution-shifted inputs. This motivates future exploration of data augmentation and paraphrasing strategies.
 
 ## 3. System Overview
 
-The Graph Query Compiler (GQC) is a partially deterministic pipeline that generates and validates structured query representations before compiling them into executable graph queries. By explicitly separating structural reasoning from linguistic realization, the system ensures that all outputs are consistent with a predefined schema and can be reliably executed in graph database environments.
+The Graph Query Compiler (GQC) is an experimental partially deterministic pipeline designed to generate and validate structured query representations before compiling them into executable graph queries. By explicitly separating structural reasoning from linguistic realization, the system aims to ensure that outputs remain consistent with a predefined schema and suitable for execution in graph database environments.
+
+```text
+Natural Language Question
+        ↓
+Graph Query Compiler (GQC)
+  ├── Schema-driven Intent Generation
+  ├── Semantic Validation Layer
+  ├── Dataset Construction (synthetic supervision)
+  ├── Model Adaptation (QLoRA fine-tuning)
+        ↓
+Structured Query Intent
+        ↓
+Query Compilation (Cypher generation)
+        ↓
+Graph Database Execution
+        ↓
+Final Answer / Results
+```
+
+The Graph Query Compiler (GQC) is a modular framework that translates natural language questions into executable graph queries through a structured intermediate representation. Instead of relying on direct text-to-query generation, the system first constructs schema-consistent query intents using controlled combinatorial generation and semantic validation. These intents are then used to build a training dataset for model adaptation via fine-tuning. At inference time, the model predicts structured intents from natural language inputs, which are validated and compiled into executable graph queries.
+
+This modular architecture allows each stage of the pipeline to operate independently while contributing to a unified objective: improving structural correctness, controllability, and reliability in natural language to graph query translation.
 
 ### Stage 1 — Dataset Generation
-In the first stage, the system generates structured query intents through controlled combinatorial processes within a predefined and schema-constrained domain. These intents are then used to construct a dataset that aligns schema-consistent representations with their corresponding natural language expressions.
+In the first stage, the system generates structured query intents through controlled combinatorial processes within a predefined schema-constrained domain. These intents are then used to construct a dataset that aligns structured representations with corresponding natural language expressions.
 
 **Subcomponents**
 
-* **Intent Generation**: Structured query intents are generated based on a predefined schema. These intents represent composable query specifications, including entities, attributes, relationships, and filtering conditions. The generation process explores the space of valid query structures while maintaining control over combinatorial complexity.
+* **Intent Generation**: Structured query intents are generated based on a predefined schema. These intents represent composable query specifications, including entities, attributes, relationships, and filtering conditions. The generation process explores the space of valid query structures while applying constraints to control combinatorial complexity.
 
-* **Dataset Construction**: Generated intents are transformed into training examples by pairing structured representations with their natural language counterparts. This ensures alignment between structure and language, enabling the creation of high-quality supervised datasets.
+* **Dataset Construction**: Generated intents are transformed into training examples by pairing structured representations with their natural language counterparts. This establishes alignment between structure and language, enabling the construction of supervised datasets for model training.
 
 ### Stage 2 — Model Adaptation and Inference
-In the second stage, the generated dataset is used to adapt language models via fine-tuning. The model learns to map natural language inputs to structured query representations, enabling accurate schema inference from user queries.
+In the second stage, the generated dataset is used to adapt language models via fine-tuning. The model learns to map natural language inputs to structured query representations, enabling inference of schema-consistent query intents from user inputs.
 
 **Subcomponents**
 
-* **Fine-tuning**: The model is trained on the generated dataset to learn the correspondence between natural language and structured query intents.
+* **Fine-tuning**: The model is trained on the constructed dataset to learn the mapping between natural language and structured query intents.
 
-* **Schema Inference**: At inference time, the model predicts structured representations from natural language questions, effectively recovering the underlying query intent.
+* **Schema Inference**: At inference time, the model predicts structured representations from natural language questions, producing an intermediate representation of the intended query structure.
 
 ### Stage 3 — Query Compilation
-In the final stage, the inferred structured representation is transformed into an executable query, such as Cypher. This ensures that outputs are not only linguistically meaningful but also operationally valid.
+In the final stage, the inferred structured representation is transformed into an executable graph query, such as Cypher. This step converts validated structured intents into operational query syntax.
 
 **Subcomponents**
 
 * **Query Translation (Cypher Generation)**: Structured query representations are compiled into executable queries, ensuring compatibility with graph database systems.
 
-At a high level, the pipeline can be summarized as:
+### Pipeline Summary
+At a high level, the system can be summarized as:
 
 ```text
 Intent Generation → Dataset Construction → Model Adaptation → Query Compilation
 ```
 
-This modular architecture allows each stage to operate independently while contributing to a unified objective: enabling reliable, interpretable, and structurally consistent query generation with direct executability in graph database systems.
+This modular architecture allows each stage to operate independently while contributing to a unified objective: enabling reliable and structurally consistent query generation with eventual executability in graph database systems.
 
-This design adopts a structure-first approach, ensuring correctness before natural language generation.
+The design follows a structure-first approach, where structural validity is prioritized before natural language generation and downstream execution.
 
 ## 4. Methodology
 
-This section describes the core components of the Graph Query Compiler (GQC), focusing on how structured query representations are generated, validated, and transformed into executable queries. The methodology is designed to enforce schema consistency and control the combinatorial space of possible queries, ensuring both diversity and structural correctness.
+This section describes the core components of the Graph Query Compiler (GQC), focusing on how structured query representations are generated, validated, and transformed into executable queries. The methodology is designed to maintain schema consistency and to control the combinatorial space of possible queries, aiming to balance diversity with structural correctness.
 
 ### 4.1 Intent Representation
 
-In GQC, queries are represented as structured intents that explicitly encode the components of a graph query. An intent is a schema-aware representation composed of entities, attributes, relationships, and filtering conditions.
+In GQC, queries are represented as structured intents that encode the main components of a graph query in an explicit way. An intent is a schema-aware representation composed of entities, attributes, relationships, and filtering conditions.
 
-This intermediate representation serves as a bridge between natural language and executable queries. By decoupling query structure from both linguistic expression and execution syntax, the system enables controlled manipulation, validation, and transformation of query logic.
+This intermediate representation serves as a bridge between natural language and executable queries. By separating query structure from both linguistic expression and execution syntax, the system enables more controlled manipulation, validation, and transformation of query logic.
 
 An example of a structured query intent is shown below:
 
@@ -136,7 +157,7 @@ An example of a structured query intent is shown below:
 }
 ```
 
-This representation separates high-level intent semantics from schema-specific query structure. The `intent` field encodes the type of operation and its modifiers, while `schema_spec` defines the structural components of the query, including the target entity, filtering conditions, and returned attributes. This separation enables precise and reliable manipulation of query generation, validation, and transformation, ensuring that all queries remain consistent with the underlying schema.
+This representation separates high-level intent semantics from schema-specific query structure. The `intent` field encodes the type of operation and its modifiers, while `schema_spec` defines the structural components of the query, including the target entity, filtering conditions, and returned attributes. This separation makes it easier to reason about, validate, and transform query representations while keeping them aligned with the underlying schema.
 
 ### 4.2 Intent Generation
 
@@ -144,15 +165,15 @@ This representation separates high-level intent semantics from schema-specific q
 
 Intent generation in GQC is performed through a schema-driven combinatorial pipeline over a predefined graph schema, where nodes, attributes, and relationships define the space of valid query structures.
 
-The objective is to systematically construct structured query representations (`intent` + `schema_spec`) through controlled combinations of traversal paths and structural components, while ensuring both diversity and structural correctness.
+The objective is to construct structured query representations (`intent` + `schema_spec`) through controlled combinations of traversal paths and structural components, while maintaining both diversity and structural consistency.
 
-To facilitate controlled experimentation, the generation process is conducted over a simplified graph schema. This allows the evaluation of the core pipeline—particularly intent generation, validation, and compilation—without interference from domain-specific complexities. The framework, however, is designed to generalize to richer schemas as future work.
+To facilitate controlled experimentation, the generation process is conducted over a simplified graph schema. This allows the evaluation of the core pipeline—particularly intent generation, validation, and compilation—without interference from domain-specific complexities. The framework is designed with the expectation that it can be extended to richer schemas in future iterations.
 
 #### Combinatorial Construction
 
-The generation process involves exploring graph traversal paths with varying depths and composing operators such as filtering, aggregation, and ordering.
+The generation process explores graph traversal paths with varying depths and composes operators such as filtering, aggregation, and ordering.
 
-Given this schema, candidate intents are generated by composing:
+Given this schema, candidate intents are constructed by combining:
 
 * target nodes
 * attribute-based filters
@@ -161,39 +182,39 @@ Given this schema, candidate intents are generated by composing:
 
 #### Structural Regimes (Complexity Control)
 
-To structure the generation process, intent generation is performed with respect to predefined structural regimes, where each regime defines a class of query patterns with a specific level of query complexity. These regimes capture patterns such as simple lookups, multi-attribute filtering, relational queries, and aggregation-based queries.
+To organize the generation process, intents are produced with respect to predefined structural regimes, where each regime defines a class of query patterns with a specific level of complexity. These regimes capture patterns such as simple lookups, multi-attribute filtering, relational queries, and aggregation-based queries.
 
-Each regime implicitly defines which components are present in the query representation, such as the inclusion of filters, relational paths, or aggregation operators. In this way, regimes not only categorize query patterns but also constrain the composition of generated intents.
+Each regime implicitly determines which components are present in the query representation, such as filters, relational paths, or aggregation operators. In this way, regimes not only categorize query patterns but also provide constraints for how intents are composed.
 
-By generating intents within these regimes, the system gains explicit control over the complexity of the resulting queries, ensuring balanced coverage across different levels of difficulty and preventing the dataset from being biased toward simpler or more frequent query patterns.
+By generating intents within these regimes, the system can better control the complexity distribution of the resulting queries, helping to balance coverage across different difficulty levels and reducing bias toward simpler or more frequent patterns.
 
 #### Field-level Policies (Fine-grained Control)
 
-Within each regime, the generation process is guided by field-level policies defined over both the intent and schema specifications. These policies regulate how individual components—such as attributes, operators, and values—can be combined, as well as which values and operators are considered valid within a given context, ensuring semantic coherence and eliminating invalid or unrealistic query patterns.
+Within each regime, the generation process is guided by field-level policies defined over both the intent and schema specifications. These policies regulate how individual components—such as attributes, operators, and values—can be combined, as well as which values and operators are considered valid in a given context, helping to maintain semantic coherence and avoid unrealistic query patterns.
 
-Operating at the level of individual schema components, these policies enable fine-grained control over how attributes, operators, and values are assigned within each part of the query representation. By constraining the admissible combinations at this level, the system effectively limits the combinatorial explosion inherent to the generation process while preserving diversity.
+Operating at the level of individual schema components, these policies provide fine-grained control over how attributes, operators, and values are assigned within each part of the query representation. This helps reduce the combinatorial space while preserving meaningful diversity in the generated queries.
 
 This design introduces multiple levels of control over the generation process, ranging from high-level structural regimes to fine-grained constraints on individual query components.
 
 #### Validation Constraints
 
-To ensure validity, generated candidates are subject to structural and semantic constraints, including schema compatibility, type consistency, and limits on query complexity.
+To support correctness, generated candidates are checked against structural and semantic constraints, including schema compatibility, type consistency, and limits on query complexity. Candidates that violate these constraints are filtered out before downstream use.
 
 #### Diversity and Coverage
 
-To promote diversity, a semantic balancing strategy is applied to prevent overrepresentation of specific query patterns, ensuring more comprehensive coverage of the query space.
+To encourage diversity, a balancing strategy is applied during generation to reduce overrepresentation of specific query patterns, aiming to improve coverage across the query space.
 
 #### Summary
 
-Unlike probabilistic approaches, this method explicitly constructs query structures within a controlled and deterministic search space. As a result, all generated intents are schema-consistent by design and provide high structural coverage for downstream dataset construction and model training.
+Unlike purely probabilistic approaches, this method constructs query structures within a controlled and deterministic generation space. As a result, generated intents are typically schema-consistent by construction and provide structured coverage for downstream dataset creation and model training.
 
 ### 4.3 Semantic Validation
 
-While the intent generation process enforces structural constraints during construction, a dedicated validation layer is responsible for filtering generated intents before they are accepted into downstream stages of the pipeline.
+While the intent generation process enforces structural constraints during construction, a dedicated validation layer is used to filter generated intents before they are accepted into downstream stages of the pipeline.
 
-This validation layer operates over the structured intent representation (`intent` + `schema_spec`) and ensures that each candidate is structurally consistent, semantically meaningful, compatible with natural language expression, and aligned with domain constraints.
+This validation layer operates over the structured intent representation (`intent` + `schema_spec`) and evaluates whether each candidate is structurally consistent, semantically meaningful, compatible with natural language expression, and aligned with domain constraints.
 
-Validation is performed declaratively using a centralized set of semantic rules, which define the domain-level conditions under which entities, attributes, operators, and values are considered valid and meaningful.
+Validation is implemented in a declarative manner using a centralized set of semantic rules, which define domain-level conditions under which entities, attributes, operators, and values are considered valid.
 
 These rules capture constraints such as:
 
@@ -204,15 +225,15 @@ These rules capture constraints such as:
 * coherence of traversal paths
 * alignment with attribute semantic types
 
-Importantly, this design separates semantic knowledge from execution logic. The rule set defines *what is valid*, while the validator is responsible for enforcing these constraints by filtering out invalid or incoherent query representations.
+Importantly, this design separates semantic knowledge from execution logic. The rule set defines *what is considered valid*, while the validator is responsible for applying these rules to filter out invalid or inconsistent query representations.
 
-The validator operates strictly as a verification layer. It does not generate, modify, or rank intents, nor does it perform schema traversal. Instead, it acts as a gatekeeping mechanism that ensures only valid intents are propagated through the pipeline.
+The validator operates strictly as a verification component. It does not generate, modify, or rank intents, nor does it perform schema traversal. Its role is limited to acting as a gatekeeping stage that determines whether a candidate can proceed through the pipeline.
 
-This separation improves modularity and maintainability, allowing domain knowledge to evolve independently from validation logic.
+This separation improves modularity and maintainability, allowing domain-specific constraints to evolve independently from the validation mechanism itself.
 
-By combining schema-level consistency checks with rule-based semantic validation, the system ensures that all accepted intents are coherent, interpretable, and suitable for downstream tasks such as dataset construction and model training.
+By combining schema-level consistency checks with rule-based semantic validation, the system aims to ensure that accepted intents are coherent and suitable for downstream tasks such as dataset construction and model training.
 
-Unlike purely generative approaches, where invalid outputs must be corrected or discarded post hoc, this method integrates validation as a first-class filtering stage. As a result, correctness is not assumed but systematically enforced before any downstream use.
+Unlike purely generative approaches, where invalid outputs are often handled post hoc, this design incorporates validation as an explicit filtering stage in the pipeline. As a result, correctness is not assumed by the generation process, but verified before further processing.
 
 ### 4.4 Dataset Construction
 
@@ -225,45 +246,45 @@ Each data sample consists of a tuple:
 
 This pairing establishes a direct mapping between linguistic input and structured query semantics, enabling the training of models for natural language to query translation.
 
-Natural language expressions are generated based on the underlying intent representation, ensuring that each query accurately reflects the structure and semantics encoded in the corresponding schema specification. This preserves alignment between form (language) and meaning (query structure), which is critical for downstream learning tasks.
+Natural language expressions are generated from the underlying intent representation, ensuring that each query reflects the structure and semantics encoded in the corresponding schema specification. This helps preserve alignment between form (language) and meaning (query structure), which is important for downstream learning tasks.
 
-The quality of the resulting dataset is directly influenced by the generation and validation processes. Since all intents are constructed within a schema-constrained space, guided by structural regimes and field-level policies, and filtered through a semantic validation layer, the dataset inherits strong guarantees of consistency, coherence, and validity.
+The quality of the resulting dataset is strongly influenced by the upstream generation and validation stages. Since intents are constructed within a schema-constrained space, guided by structural regimes and field-level policies, and filtered through a semantic validation layer, the dataset tends to be more consistent and structurally coherent than unconstrained generation approaches.
 
-In addition, the semantic balancing strategy applied during intent generation ensures that the dataset maintains a diverse distribution of query patterns. This prevents overrepresentation of specific structures and promotes broader coverage across different query types and complexity levels.
+In addition, a semantic balancing strategy is applied during intent generation to encourage a more diverse distribution of query patterns. This helps reduce overrepresentation of simpler structures and improves coverage across different query types and complexity levels.
 
-As a result, the constructed dataset provides:
+As a result, the constructed dataset exhibits:
 
-* high structural diversity across query patterns
-* balanced representation of complexity levels
-* strong alignment between natural language and structured queries
-* elimination of invalid or incoherent samples
+* structural diversity across query patterns
+* balanced distribution of complexity levels
+* alignment between natural language and structured queries
+* reduction of invalid or incoherent samples
 
-Unlike datasets derived from raw text or weak supervision, this approach produces high-quality training data with explicit structural grounding and minimal noise.
+Compared to datasets derived from raw text or weak supervision, this approach focuses on generating data with explicit structural grounding, reducing reliance on noisy annotations.
 
-This dataset serves as the foundation for model adaptation, enabling language models to learn accurate mappings from natural language inputs to structured query representations.
+This dataset serves as the basis for model adaptation, enabling language models to learn mappings from natural language inputs to structured query representations.
 
 ### 4.5 Model Adaptation
 
 The dataset constructed from validated intents is used to adapt language models to the task of mapping natural language queries to structured query representations.
 
-This adaptation is performed through supervised fine-tuning, where the model learns to predict structured intents (`intent` + `schema_spec`) given a natural language input. The objective is to enable accurate schema inference from user queries, bridging the gap between unstructured language and executable query logic.
+This adaptation is performed through supervised fine-tuning, where the model learns to predict structured intents (`intent` + `schema_spec`given a natural language input. The objective is to enable schema-aware inference from user queries, bridging unstructured language and executable query logic.
 
-During training, each sample provides a direct alignment between a natural language expression and its corresponding structured representation. This explicit supervision allows the model to learn compositional mappings between linguistic patterns and query components, such as entities, attributes, filters, and operators.
+During training, each sample provides a direct alignment between a natural language expression and its corresponding structured representation. This supervision allows the model to learn compositional mappings between linguistic patterns and query components, such as entities, attributes, filters, and operators.
 
-Unlike standard language modeling, which relies on implicit pattern learning, this approach introduces a structured prediction task where correctness can be explicitly evaluated at the level of the generated intent.
+Unlike standard language modeling, which relies on implicit pattern learning, this formulation defines a structured prediction task where correctness can be evaluated at the level of the generated intent, rather than only at the surface text level.
 
-At inference time, the fine-tuned model receives a natural language query and predicts the corresponding structured representation. This predicted intent serves as an intermediate, interpretable form that can be validated and compiled into an executable query.
+At inference time, the fine-tuned model receives a natural language query and predicts the corresponding structured representation. This predicted intent serves as an intermediate representation that can be validated and subsequently compiled into an executable query.
 
 The use of structured representations provides several advantages:
 
-* **Interpretability**: The predicted intent can be inspected and analyzed before execution.
-* **Controllability**: Errors can be identified and corrected at the structural level.
-* **Modularity**: The system decouples language understanding from query execution.
-* **Robustness**: The model operates within a schema-constrained space, reducing invalid outputs.
+* **Interpretability**: The predicted intent can be inspected before execution.
+* **Controllability**: Errors can be identified at the structural level.
+* **Modularity**: The system separates language understanding from query execution.
+* **Robustness**: The model is constrained by the schema, reducing some classes of invalid outputs.
 
-Furthermore, the high-quality dataset produced by the GQC pipeline—characterized by structural consistency, semantic validity, and balanced coverage—enables more reliable learning compared to datasets derived from noisy or weakly supervised sources.
+The quality of the model’s performance is influenced by the dataset produced by the GQC pipeline, which emphasizes structural consistency and balanced coverage. However, generalization quality may still depend on linguistic diversity and the complexity of natural language variations in the dataset.
 
-As a result, the adapted model is better equipped to perform accurate and consistent natural language to query translation, forming a critical component of the overall system.
+As a result, the adapted model is expected to perform structured natural language to query translation within the constraints defined by the schema and training distribution.
 
 ### 4.6 Query Compilation
 
@@ -271,126 +292,130 @@ In the final stage of the pipeline, structured query representations are transfo
 
 The compilation process operates deterministically over the structured representation, translating each component of the schema specification into its corresponding query construct. This includes:
 
-* mapping target nodes to MATCH clauses
+* mapping target nodes to `MATCH` clauses
 * translating relationship paths into graph traversals
-* converting filter conditions into WHERE clauses
+* converting filter conditions into `WHERE` clauses
 * applying ordering and limits where specified
 * handling aggregation operations when present
 
-Because the input representation is already validated and schema-consistent, the compilation step does not require ambiguity resolution or complex inference. Instead, it follows a rule-based transformation process that ensures correctness and reproducibility.
+Since the input representation has already been validated and constrained by the previous stages, the compilation step does not require ambiguity resolution or additional semantic inference. Instead, it follows a rule-based transformation process designed to preserve structural correctness and reproducibility.
 
-This design separates query generation from query execution. Rather than relying on language models to directly produce executable queries, the system delegates this responsibility to a deterministic compiler that operates over a structured intermediate representation.
+This design separates query generation from query execution. Rather than relying on language models to directly produce executable queries, the system delegates this responsibility to a deterministic compiler operating over a structured intermediate representation.
 
 This separation provides several advantages:
 
-* **Reliability**: Generated queries are guaranteed to be syntactically and structurally valid.
-* **Transparency**: The transformation from intent to query can be inspected and audited.
-* **Maintainability**: Changes to the query language or schema can be handled at the compiler level.
-* **Error Isolation**: Failures can be traced back to either the prediction stage or the compilation stage.
+* **Reliability**: The compilation process reduces the likelihood of syntactically invalid queries under the defined schema assumptions.
+* **Transparency**: The mapping from intent to query can be inspected and reasoned about.
+* **Maintainability**: Adjustments to schema or target query language can be handled at the compiler level.
+* **Error Isolation**: Issues can be traced more clearly to either the generation or compilation stages.
 
-Furthermore, this approach mitigates common failure modes of language models, such as producing invalid or inconsistent queries, by removing direct dependency on free-form text generation for executable outputs.
+Furthermore, this approach reduces dependence on free-form language generation for producing executable queries, helping to avoid common inconsistencies observed in direct text-to-query generation approaches.
 
-As a result, the system ensures that all executable queries are derived from validated, interpretable, and schema-aligned representations, completing the end-to-end pipeline from natural language input to reliable query execution.
+As a result, the system produces executable queries derived from structured and validated representations, completing the pipeline from natural language input to graph query execution.
 
 ## 5. Discussion
 
 ### 5.0 Experimental Status
 
-The current implementation of the GQC framework is still under active development and presents limitations that prevent a comprehensive empirical evaluation at this stage.
+The current implementation of the GQC framework is still under active development and has not yet been subjected to a comprehensive empirical evaluation.
 
-Preliminary qualitative experiments and controlled observations indicate that the system is capable of generating structurally consistent query representations under controlled conditions. In particular, the combination of schema-driven generation and semantic validation contributes to the production of valid and interpretable structured outputs.
+Preliminary qualitative experiments and controlled tests suggest that the system can generate structurally consistent query representations under constrained conditions. In particular, the combination of schema-driven generation and semantic validation appears to improve the consistency and validity of intermediate structured outputs.
 
-However, the system exhibits limitations in robustness, especially in the model adaptation stage. The learned model remains sensitive to the linguistic patterns observed during training and struggles to generalize to paraphrased or structurally equivalent queries expressed in diverse forms.
+However, the system still presents limitations in robustness, especially in the model adaptation stage. The model tends to be sensitive to the linguistic patterns seen during training and may struggle with paraphrased or semantically equivalent queries expressed in different forms.
 
-These observations motivate the analysis presented in the following sections and highlight key areas for improvement, including dataset diversity, paraphrasing strategies, and refinement of semantic validation. As such, the current work should be understood as a step toward a more complete system, with future work focusing on empirical validation and performance benchmarking.
+These observations indicate that while the structural aspects of the pipeline are relatively stable under controlled settings, generalization across diverse natural language expressions remains an open challenge.
+
+This work should therefore be understood as an early-stage implementation of the proposed framework, focused on design, decomposition, and controlled experimentation. Future work will focus on expanding empirical evaluation, improving dataset diversity, and systematically analyzing model generalization and failure cases.
 
 ### 5.1 Observed Strengths of the Model
 
-The proposed approach demonstrates strong performance in scenarios where query structure aligns with patterns observed during training, particularly in generating accurate structured representations from familiar inputs.
+The proposed approach shows consistent behavior in scenarios where input queries align with patterns present in the training distribution, particularly in generating structured representations that reflect the underlying schema.
 
 The following strengths were observed:
 
 1. **Structural Consistency**  
-The model consistently produces structurally coherent outputs that adhere to the underlying graph schema. Generated intents correctly identify target nodes, attribute-based filters, and operators, reflecting the effectiveness of the schema-driven generation process and the validation mechanisms embedded in the pipeline.
+The model generally produces structurally coherent outputs that adhere to the defined graph schema. Generated intents correctly capture target nodes, attributes, and filtering operations, suggesting that the schema-driven generation process and validation layer contribute positively to output consistency.
 
-2. **Robustness Within the Domain**  
-The model maintains stable behavior across a range of query types supported by the schema. This includes handling multi-attribute filtering and basic relational patterns when expressed in familiar linguistic forms, demonstrating robustness within the defined domain.
+2. **Stability Within the Defined Domain**  
+The model exhibits relatively stable behavior across query types supported by the schema. This includes handling basic multi-attribute filtering and simple relational patterns when expressed in familiar formulations, indicating reasonable robustness within the constrained domain.
 
-3. **Accurate Mapping of Learned Patterns**  
-When input queries follow known syntactic and semantic patterns, the model reliably maps them to correct structured representations. This indicates strong alignment between the training data and the learned mappings.
+3. **Learning of Frequent Patterns**  
+When input queries follow patterns that are well represented in the training data, the model tends to produce correct structured mappings. This suggests that the model effectively learns correlations between recurring linguistic patterns and their corresponding structured representations.
 
-4. **Structural Generalization**  
-The model is capable of combining known structural components—such as filters and operators—in novel ways. While it may struggle with diverse linguistic expressions, this suggests that the model has learned aspects of the underlying query structure, although its linguistic generalization remains limited.
+4. **Limited Structural Compositionality**  
+In some cases, the model is able to combine known structural components—such as filters and operators—in slightly novel configurations. However, this behavior is not fully consistent and tends to degrade when linguistic variation increases, indicating partial structural generalization but limited linguistic robustness.
 
-5. **Reliability Through Controlled Generation**  
-The integration of validation and controlled generation contributes to the overall reliability of the system, reducing the likelihood of producing invalid or incoherent query representations.
+5. **Improved Output Validity via Constrained Pipeline**  
+The presence of schema constraints and validation steps in the pipeline contributes to reducing invalid or inconsistent outputs compared to unconstrained generation approaches. This suggests that explicit structure enforcement is beneficial for maintaining output reliability.
 
 ### 5.2 Challenges in Intent Dataset Generation
 
-Constructing high-quality datasets for mapping natural language queries to structured graph representations presents several fundamental challenges. These challenges arise from the combinatorial nature of query structures, the need for semantic coherence, and the difficulty of aligning structured representations with natural language expressions.
+Constructing high-quality datasets for mapping natural language queries to structured graph representations introduces several fundamental challenges. These challenges emerge from the combinatorial nature of query structures, the need for semantic coherence, and the difficulty of aligning structured representations with natural language expressions in a consistent way.
 
 1. **Combinatorial Explosion of Query Structures**  
-The combinatorial explosion of possible query structures is one of the primary challenges in dataset construction. Given a graph schema with multiple nodes, attributes, relationships, and operators, the number of possible query combinations grows rapidly as traversal depth and structural complexity increase. Naively enumerating all possible combinations leads to an intractable search space, making controlled generation essential.
+The space of possible query structures grows rapidly as the number of nodes, attributes, relationships, and operators increases. As traversal depth and structural complexity expand, the number of valid combinations becomes difficult to enumerate exhaustively. This makes naive generation impractical and motivates the use of constrained or guided generation strategies.
 
 2. **Structural vs. Semantic Validity**  
-Another key challenge is the distinction between structural and semantic validity. A query may be structurally consistent with the schema—using valid nodes, attributes, and relationships—yet still be semantically meaningless or unrealistic in practice. For example, certain combinations of attributes and operators may not correspond to plausible user intents, requiring an additional layer of semantic validation beyond structural correctness.
+A key challenge lies in distinguishing between structural correctness and semantic plausibility. A query may be valid with respect to the schema—using correct nodes, attributes, and operators—while still representing an unrealistic or unlikely user intent. This requires additional mechanisms beyond schema constraints to filter or guide generation toward more meaningful query patterns.
 
 3. **Distribution Imbalance**  
-Imbalance in the distribution of generated queries also presents a significant challenge. Unconstrained generation tends to favor simpler or more common query patterns, leading to datasets that underrepresent more complex or less frequent structures. This imbalance can negatively impact model training, as the model may become biased toward specific query types.
+Uncontrolled or partially controlled generation processes tend to produce an uneven distribution of query types. Simpler or more frequent patterns often dominate the dataset, while more complex or rare structures are underrepresented. This imbalance can influence model behavior during training, leading to bias toward more common query patterns.
 
 4. **Natural Language Alignment**  
-Aligning structured representations with natural language expressions is inherently challenging. A single structured query may correspond to multiple valid linguistic expressions, while similar natural language queries may map to different underlying structures. Ensuring consistent and meaningful alignment between these representations is critical for supervised learning.
+Aligning structured query representations with natural language remains inherently ambiguous. A single structured intent can correspond to multiple valid natural language expressions, and conversely, similar expressions may map to different underlying structures. Ensuring consistency in this mapping is a non-trivial aspect of dataset construction.
 
 5. **Lack of High-quality Ground Truth Data**  
-A key challenge in dataset construction is the lack of reliable ground truth data. Creating accurate pairs of natural language queries and their corresponding structured representations requires manual annotation, which is time-consuming, error-prone, and difficult to scale, especially for complex graph schemas. As a result, many existing approaches rely on automatically generated or weakly supervised data, which may introduce noise and inconsistencies that negatively affect model performance.
+Reliable ground truth pairs of natural language and structured queries are difficult to obtain at scale. Manual annotation is expensive and error-prone, especially for complex schemas. As a result, many approaches rely on synthetic or automatically generated data, which may introduce noise or inconsistencies that affect downstream learning quality.
 
-These challenges motivate the need for controlled, schema-aware, and semantically grounded dataset construction methods, as realized in the GQC framework.
+Overall, these challenges highlight the need for controlled, schema-aware, and semantically guided dataset construction approaches, as explored in the GQC framework.
 
 ### 5.3 Limitations
 
-Despite its advantages, the proposed approach presents several limitations.
+Despite the advantages of the proposed approach, several limitations are currently present in the system.
 
 1. **Dependence on Graph Schema**  
-The system relies on the availability of a well-defined graph schema. The quality and expressiveness of the generated queries are directly influenced by the completeness and accuracy of this schema, which may limit the system’s effectiveness if the schema is incomplete or poorly specified.
+The system depends on the availability of a well-defined graph schema. The quality and expressiveness of generated queries are directly tied to the completeness and correctness of this schema. In cases where the schema is incomplete or poorly specified, the quality of generated outputs may be affected.
 
 2. **Manual Definition of Regimes and Policies**  
-The use of predefined structural regimes and field-level policies requires manual specification and domain knowledge. While this enables fine-grained control over the generation process, it may introduce additional effort when adapting the framework to new domains.
+The framework relies on manually defined structural regimes and field-level policies. While this enables precise control over the generation process, it also introduces additional design effort and may reduce flexibility when adapting the system to new domains.
 
 3. **Closed-domain Assumption**  
-The framework operates within a closed-domain setting, where all query structures are constrained by a predefined schema. As a result, it does not generalize to open-domain queries or to scenarios involving unseen entities, attributes, or relationships.
+The current implementation operates under a closed-domain assumption, where all query structures are constrained by a predefined schema. As a result, the system is not designed to handle open-domain queries or unseen entities, attributes, or relationship types.
 
 4. **Limited Linguistic Generalization**  
-The model shows reduced performance when handling paraphrased or linguistically diverse inputs. Although it generalizes well at the structural level, its reliance on patterns present in the training data can lead to errors when queries are expressed in unfamiliar ways.
+The model shows reduced robustness when exposed to paraphrased or linguistically diverse inputs. While performance is relatively stable for familiar patterns, generalization to unseen phrasings remains limited, indicating a dependency on the distribution of the training data.
 
 5. **Noise and Bias in Automatically Generated Datasets**  
-While automatic dataset generation enables scalability and structural consistency, it may introduce noise and biases if not properly constrained. In particular, weak semantic control or inconsistent generation rules can result in invalid, unrealistic, or systematically skewed query patterns, negatively affecting model reliability.
+Although controlled generation improves structural consistency, automatically generated datasets may still introduce noise or unintended biases if generation rules are not sufficiently constrained. This can result in unrealistic or unevenly distributed query patterns, which may impact model behavior during training.
 
 6. **Limited Linguistic Diversity**  
-Automatically generated datasets may also lack sufficient linguistic variation. Without explicit mechanisms for generating diverse natural language expressions, the dataset may fail to capture the variability of real-world queries, limiting downstream model generalization.
+The generated natural language expressions may not fully capture the variability observed in real-world user queries. Without explicit paraphrasing or augmentation strategies, the dataset can remain somewhat limited in linguistic diversity, which may affect generalization in downstream tasks.
 
 ### 5.4 Future Work
 
 Several directions can be explored to extend and improve the proposed framework.
 
 1. **Paraphrasing and Linguistic Augmentation**  
-Incorporating paraphrasing strategies to increase linguistic diversity is a promising direction. Generating multiple natural language variants for each structured intent may improve the model’s ability to generalize to unseen formulations.
+Incorporating paraphrasing strategies is a promising direction for increasing linguistic diversity in the dataset. Generating multiple natural language variations for the same structured intent may improve the model’s robustness to different phrasings and reduce sensitivity to specific patterns observed during training.
 
 2. **Automated Policy and Regime Learning**  
-Automating the definition of structural regimes and field-level policies could reduce manual effort and improve scalability. Learning these constraints directly from data or usage patterns is a potential avenue for future research.
+Currently, structural regimes and field-level policies are manually defined. Automating or partially learning these constraints from data or observed query distributions could reduce manual effort and improve scalability when adapting the framework to new domains.
 
 3. **Evaluation and Benchmarking**  
-Conducting systematic evaluations against baseline approaches is an important next step. This includes measuring structural accuracy, robustness to linguistic variation, and execution correctness.
+A more systematic evaluation against baseline approaches remains an important next step. This includes measuring structural accuracy, robustness to linguistic variation, and correctness of the final executed queries, enabling a clearer assessment of the framework’s effectiveness.
 
 4. **Extension to More Complex Schemas**  
-Expanding the framework to support richer and more complex graph schemas would increase its applicability in real-world scenarios, including domains with deeper relational structures.
+Extending the framework to support richer and more complex graph schemas is a natural direction for future work. This would allow the system to be applied in more realistic scenarios involving deeper relational structures and more diverse query patterns.
 
 5. **Improved Semantic Validation**  
-Enhancing the semantic validation layer to capture more nuanced constraints could further improve the quality of generated intents and reduce unrealistic query patterns.
+Enhancing the semantic validation layer to capture more nuanced or context-dependent constraints could further improve the quality of generated intents. This may help reduce edge cases where structurally valid queries are still semantically weak or unrealistic.
 
 ## 6. Conclusion
 
-This work introduced the Graph Query Compiler (GQC), a modular framework for generating structurally valid and semantically consistent graph queries from natural language. By combining schema-driven intent generation, field-level policies, and a dedicated semantic validation layer, the approach enables controlled construction of high-quality intent datasets and reliable query representations.
+This work introduced the Graph Query Compiler (GQC), a modular framework for generating structurally valid and semantically consistent graph queries from natural language. The proposed approach combines schema-driven intent generation, field-level policies, and a semantic validation layer to support controlled construction of structured query representations and corresponding datasets.
 
-The results highlight the effectiveness of enforcing structure and constraints throughout the pipeline, leading to consistent and interpretable outputs. At the same time, the analysis reveals that linguistic generalization remains a key challenge, emphasizing the importance of dataset design and diversity.
+The observations from the current implementation suggest that enforcing structural constraints throughout the generation pipeline contributes to more consistent and interpretable query representations. In particular, separating structural construction from linguistic realization helps reduce invalid or inconsistent outputs in controlled settings.
 
-Overall, this work demonstrates that treating query generation as a controlled, schema-aware process provides a viable path toward more reliable natural language interfaces for graph-based systems.
+At the same time, the analysis indicates that linguistic generalization remains a limitation, especially when dealing with paraphrased or distributionally different inputs from those seen during training. This highlights the importance of dataset diversity and further improvements in natural language coverage.
+
+Overall, this work represents an initial step toward a controlled, schema-aware approach for natural language to graph query generation. The results suggest that explicit structure and validation mechanisms can improve reliability, while also indicating several directions for future refinement and empirical evaluation.
