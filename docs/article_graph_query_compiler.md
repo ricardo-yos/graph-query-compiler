@@ -313,9 +313,22 @@ Furthermore, this approach reduces dependence on free-form language generation f
 
 As a result, the system produces executable queries derived from structured and validated representations, completing the pipeline from natural language input to graph query execution.
 
-## 5. Discussion
+## 5. Demonstration (Current System Behavior)
 
-### 5.0 Experimental Status
+This section presents a set of representative examples illustrating the current behavior of the Graph Query Compiler (GQC). The objective is not to showcase ideal performance, but to provide a transparent view of how the system operates in practice, including both successful cases and observed limitations.
+
+Each example includes:
+
+* a natural language query
+* the predicted structured intent
+* the compiled query
+* a brief analysis of the outcome
+
+These examples reflect the current state of the system and are not intended to provide exhaustive coverage or serve as a formal benchmark.
+
+## 6. Discussion
+
+### 6.0 Experimental Status
 
 The current implementation of the GQC framework is still under active development and has not yet been subjected to a comprehensive empirical evaluation.
 
@@ -327,7 +340,7 @@ These observations indicate that while the structural aspects of the pipeline ar
 
 This work should therefore be understood as an early-stage implementation of the proposed framework, focused on design, decomposition, and controlled experimentation. Future work will focus on expanding empirical evaluation, improving dataset diversity, and systematically analyzing model generalization and failure cases.
 
-### 5.1 Observed Strengths of the Model
+### 6.1 Observed Strengths of the Model
 
 The proposed approach shows consistent behavior in scenarios where input queries align with patterns present in the training distribution, particularly in generating structured representations that reflect the underlying schema.
 
@@ -348,7 +361,7 @@ In some cases, the model is able to combine known structural components—such a
 5. **Improved Output Validity via Constrained Pipeline**  
 The presence of schema constraints and validation steps in the pipeline contributes to reducing invalid or inconsistent outputs compared to unconstrained generation approaches. This suggests that explicit structure enforcement is beneficial for maintaining output reliability.
 
-### 5.2 Challenges in Intent Dataset Generation
+### 6.2 Challenges in Intent Dataset Generation
 
 Constructing high-quality datasets for mapping natural language queries to structured graph representations introduces several fundamental challenges. These challenges emerge from the combinatorial nature of query structures, the need for semantic coherence, and the difficulty of aligning structured representations with natural language expressions in a consistent way.
 
@@ -369,7 +382,7 @@ Reliable ground truth pairs of natural language and structured queries are diffi
 
 Overall, these challenges highlight the need for controlled, schema-aware, and semantically guided dataset construction approaches, as explored in the GQC framework.
 
-### 5.3 Limitations
+### 6.3 Limitations
 
 Despite the advantages of the proposed approach, several limitations are currently present in the system.
 
@@ -391,7 +404,7 @@ Although controlled generation improves structural consistency, automatically ge
 6. **Limited Linguistic Diversity**  
 The generated natural language expressions may not fully capture the variability observed in real-world user queries. Without explicit paraphrasing or augmentation strategies, the dataset can remain somewhat limited in linguistic diversity, which may affect generalization in downstream tasks.
 
-### 5.4 Future Work
+### 6.4 Future Work
 
 Several directions can be explored to extend and improve the proposed framework.
 
@@ -410,7 +423,7 @@ Extending the framework to support richer and more complex graph schemas is a na
 5. **Improved Semantic Validation**  
 Enhancing the semantic validation layer to capture more nuanced or context-dependent constraints could further improve the quality of generated intents. This may help reduce edge cases where structurally valid queries are still semantically weak or unrealistic.
 
-## 6. Conclusion
+## 7. Conclusion
 
 This work introduced the Graph Query Compiler (GQC), a modular framework for generating structurally valid and semantically consistent graph queries from natural language. The proposed approach combines schema-driven intent generation, field-level policies, and a semantic validation layer to support controlled construction of structured query representations and corresponding datasets.
 
