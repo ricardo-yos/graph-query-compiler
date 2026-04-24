@@ -1,4 +1,4 @@
-# Graph Query Compiler: Structured Reasoning for Reliable Natural Language Interfaces to Knowledge Graphs
+# Graph Query Compiler: Structured Reasoning for Natural Language Interfaces to Knowledge Graphs
 
 ## Abstract
 
