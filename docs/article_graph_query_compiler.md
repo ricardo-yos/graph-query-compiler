@@ -315,7 +315,7 @@ As a result, the system produces executable queries derived from structured and 
 
 ## 5. Demonstration (Current System Behavior)
 
-This section presents a set of representative examples illustrating the current behavior of the Graph Query Compiler (GQC). The objective is not to showcase ideal performance, but to provide a transparent view of how the system operates in practice, including both successful cases and observed limitations.
+This section presents a set of representative examples illustrating the current behavior of the Graph Query Compiler (GQC). The objective is not to showcase ideal performance, but to provide a transparent view of how the system operates in practice, including successful predictions, partially correct outputs, and failure cases.
 
 Each example includes:
 
@@ -326,12 +326,14 @@ Each example includes:
 
 These examples reflect the current state of the system and are not intended to provide exhaustive coverage or serve as a formal benchmark.
 
-### Example 1 — Simple Filtering (Successful Case)
+### 5.1 Successful Cases
+
+#### Example 1 — Simple Filtering
 
 **Natural Language Query:**
 
 ```text
-Which neighborhoods have an average monthly income greater than 1000 reais?
+Which neighborhoods have an average monthly income greater than 1000 (currency units)?
 ```
 
 **Predicted Intent:**
@@ -374,11 +376,11 @@ RETURN n.name AS name
 
 **Observation:**
 
-The model correctly maps the natural language query to the structured intent, accurately identifying the target entity (`Neighborhood`), the filtering condition (`average_monthly_income > 1000`), and the return attribute. This example reflects a case where the input closely matches patterns seen during training, resulting in a fully correct prediction and valid query compilation.
+The model accurately maps the natural language query to the structured intent, accurately identifying the target entity (`Neighborhood`), the filtering condition (`average_monthly_income > 1000`), and the return attribute. This example reflects a case where the input closely matches patterns seen during training, resulting in a fully correct prediction and valid query compilation.
 
-### Example 2 — Multi-attribute Filtering (Successful Case)
+#### Example 2 — Multi-attribute Filtering
 
-**Natural Language Query**
+**Natural Language Query:**
 
 ```text
 Which places have a rating above 3 and more than 10 reviews?
@@ -432,14 +434,14 @@ RETURN p.name AS name
 
 **Observation:**
 
-The model correctly identifies and composes multiple filtering conditions from the natural language query, mapping both constraints (`rating > 3` and `num_reviews > 10`) into the structured intent. This demonstrates the model’s ability to handle conjunctions and multi-attribute queries when expressed in familiar linguistic patterns, resulting in a valid and accurate query compilation.
+The model correctly composes multiple filtering conditions from the natural language query, mapping both constraints (`rating > 3` and `num_reviews > 10`) into the structured intent. This demonstrates the model’s ability to handle conjunctions and multi-attribute queries when expressed in familiar linguistic patterns, resulting in a valid and accurate query compilation.
 
-### Example 3 — Filtering with Ordering and Limit (Successful Case)
+#### Example 3 — Filtering with Ordering and Limit
 
-**Natural Language Query**
+**Natural Language Query:**
 
 ```text
-List the first 10 pet stores with a rating above 4 in ascending order.
+List 10 pet stores with a rating above 4 in ascending order.
 ```
 
 **Predicted Intent:**
@@ -496,7 +498,175 @@ LIMIT 10
 
 **Observation:**
 
-The model successfully handles a more complex query involving filtering, ordering, and limiting results. It correctly identifies multiple constraints (`rating > 4` and `type = pet_store`), applies sorting in ascending order, and enforces the result limit. This example demonstrates the model’s ability to compose multiple query components when the input follows familiar structural and linguistic patterns.
+This example demonstrates the model’s ability to compose multiple query components, including filtering, ordering, and limiting. The model correctly captures both attribute constraints (`rating > 4` and `type = pet_store`) and control operators (`ORDER BY`, `LIMIT`), resulting in a structurally complete and executable query. This behavior is observed when the input aligns closely with patterns seen during training.
+
+**Summary**
+
+Across these examples, the model demonstrates strong performance in scenarios where query structure and linguistic patterns closely match those observed during training. In such cases, the model is able to accurately compose filtering conditions and control operators, producing structurally consistent and executable queries.
+
+### 5.2 Partially Correct Cases
+
+#### Example 4 — Incorrect Aggregation Usage
+
+**Natural Language Query:**
+
+```text
+Which places have at least 10 reviews?
+```
+
+**Predicted Intent:**
+
+```json
+{
+  "user_intent": "retrieve",
+  "schema": {
+    "aggregate": {
+      "attribute": "num_reviews",
+      "function": "count"
+    },
+    "filters": [
+      {
+        "attribute": "num_reviews",
+        "node_label": "Place",
+        "operator": ">=",
+        "value_float": null,
+        "value_int": 10,
+        "value_str": null
+      }
+    ],
+    "limit": null,
+    "order_by": null,
+    "path": [],
+    "return_attributes": [],
+    "target": {
+      "label": "Place"
+    }
+  }
+}
+```
+
+**Generated Cypher:**
+
+```cypher
+MATCH (p:Place)
+WHERE p.num_reviews >= 10
+RETURN p
+```
+
+**Observation:**
+
+The model correctly identifies the filtering condition (`num_reviews >= 10`), demonstrating proper understanding of the main constraint. However, it introduces an unnecessary aggregation component (`count(num_reviews)`) that is not required for this query. Additionally, the absence of explicit return attributes reduces clarity in the output structure. This indicates partial understanding of the query intent, with inconsistencies in how structural components are applied.
+
+#### Example 5 — Missing Relationship Path and Invalid Filter Mapping
+
+**Natural Language Query:**
+
+```text
+How many pet shops are located in the Campestre neighborhood?
+```
+
+**Predicted Intent:**
+
+```json
+{
+  "user_intent": "retrieve",
+  "schema": {
+    "aggregate": {
+      "attribute": null,
+      "function": "count"
+    },
+    "filters": [
+      {
+        "attribute": "type",
+        "node_label": "Neighborhood",
+        "operator": "=",
+        "value_float": null,
+        "value_int": null,
+        "value_str": "Campestre"
+      },
+      {
+        "attribute": "type",
+        "node_label": "Place",
+        "operator": "=",
+        "value_float": null,
+        "value_int": null,
+        "value_str": "pet_store"
+      }
+    ],
+    "limit": null,
+    "order_by": null,
+    "path": [],
+    "return_attributes": [],
+    "target": {
+      "label": "Place"
+    }
+  }
+}
+```
+
+**Generated Cypher:**
+
+```cypher
+// No query generated
+```
+
+**Observation:**
+
+The model correctly captures the aggregation intent (`count`) and captures the two main constraints: filtering by place type (`pet_store`) and by neighborhood (`Campestre`). However, it incorrectly maps the neighborhood constraint as an attribute filter instead of modeling it as a relationship traversal. Additionally, the absence of a defined path between `Place` and `Neighborhood` prevents the query from being compiled into Cypher, resulting in no generated output. This indicates partial understanding of the query intent, with limitations in handling relational structures within the schema.
+
+#### Example 6 — Misinterpretation of Superlative Query
+
+**Natural Language Query:**
+
+```text
+Which neighborhood has the highest population?
+```
+
+**Predicted Intent:**
+
+```json
+{
+  "user_intent": "retrieve",
+  "schema": {
+    "aggregate": null,
+    "filters": [
+      {
+        "attribute": "total_resident_population",
+        "node_label": "Neighborhood",
+        "operator": ">",
+        "value_float": null,
+        "value_int": 5000,
+        "value_str": null
+      }
+    ],
+    "limit": null,
+    "order_by": null,
+    "path": [],
+    "return_attributes": [
+      "name"
+    ],
+    "target": {
+      "label": "Neighborhood"
+    }
+  }
+}
+```
+
+**Generated Cypher:**
+
+```cypher
+MATCH (n:Neighborhood)
+WHERE n.total_resident_population > 5000
+RETURN n.name AS name
+```
+
+**Observation:**
+
+The model correctly identifies the relevant attribute (`total_resident_population`) and applies a filtering condition. However, it misinterprets the superlative expression “highest” as a fixed threshold (`> 5000`) instead of modeling it as an ordering problem (e.g., sorting by population in descending order with a limit of 1). This indicates a limitation in handling comparative and superlative language, where ranking semantics are not properly captured.
+
+**Summary**
+
+Across these examples, the model demonstrates partial understanding of query structure, correctly identifying key components such as filters and aggregation intent. However, consistent limitations are observed in structural composition, relational reasoning, and handling of linguistic nuances such as superlatives. These patterns indicate that while the model captures local aspects of the query, it struggles to fully represent the complete intent in a structurally consistent manner.
 
 ## 6. Discussion
 
