@@ -128,17 +128,21 @@ class SchemaNormalizer:
 
         This method ensures:
         - All required fields exist
-        - All fields match expected types
-        - Invalid or null values are replaced with defaults
+        - Basic type consistency when a default type is defined
+        - Missing values are replaced with safe defaults
 
-        It then delegates normalization to field-specific handlers.
+        Type normalization for optional or flexible fields (e.g., limit, order_by)
+        is delegated to field-specific handlers.
+
+        This avoids discarding valid values produced by the LLM.
         """
 
-        # Enforce presence and type of all top-level schema fields
+        # Ensure all top-level schema fields exist and apply basic type checks
+        # only when the default value defines a concrete type (non-None)
         for key, default in cls.DEFAULT_SCHEMA.items():
             if key not in schema or schema[key] is None:
                 schema[key] = copy.deepcopy(default)
-            elif not isinstance(schema[key], type(default)):
+            elif default is not None and not isinstance(schema[key], type(default)):
                 schema[key] = copy.deepcopy(default)
 
         # Normalize individual components
