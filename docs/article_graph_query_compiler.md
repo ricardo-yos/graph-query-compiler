@@ -326,6 +326,178 @@ Each example includes:
 
 These examples reflect the current state of the system and are not intended to provide exhaustive coverage or serve as a formal benchmark.
 
+### Example 1 — Simple Filtering (Successful Case)
+
+**Natural Language Query:**
+
+```text
+Which neighborhoods have an average monthly income greater than 1000 reais?
+```
+
+**Predicted Intent:**
+
+```json
+{
+  "user_intent": "retrieve",
+  "schema": {
+    "aggregate": null,
+    "filters": [
+      {
+        "attribute": "average_monthly_income",
+        "node_label": "Neighborhood",
+        "operator": ">",
+        "value_float": null,
+        "value_int": 1000,
+        "value_str": null
+      }
+    ],
+    "limit": null,
+    "order_by": null,
+    "path": [],
+    "return_attributes": [
+      "name"
+    ],
+    "target": {
+      "label": "Neighborhood"
+    }
+  }
+}
+```
+
+**Generated Cypher:**
+
+```cypher
+MATCH (n:Neighborhood)
+WHERE n.average_monthly_income > 1000
+RETURN n.name AS name
+```
+
+**Observation:**
+
+The model correctly maps the natural language query to the structured intent, accurately identifying the target entity (`Neighborhood`), the filtering condition (`average_monthly_income > 1000`), and the return attribute. This example reflects a case where the input closely matches patterns seen during training, resulting in a fully correct prediction and valid query compilation.
+
+### Example 2 — Multi-attribute Filtering (Successful Case)
+
+**Natural Language Query**
+
+```text
+Which places have a rating above 3 and more than 10 reviews?
+```
+
+**Predicted Intent:**
+
+```json
+{
+  "user_intent": "retrieve",
+  "schema": {
+    "aggregate": null,
+    "filters": [
+      {
+        "attribute": "rating",
+        "node_label": "Place",
+        "operator": ">",
+        "value_float": null,
+        "value_int": 3,
+        "value_str": null
+      },
+      {
+        "attribute": "num_reviews",
+        "node_label": "Place",
+        "operator": ">",
+        "value_float": null,
+        "value_int": 10,
+        "value_str": null
+      }
+    ],
+    "limit": null,
+    "order_by": null,
+    "path": [],
+    "return_attributes": [
+      "name"
+    ],
+    "target": {
+      "label": "Place"
+    }
+  }
+}
+```
+
+**Generated Cypher:**
+
+```cypher
+MATCH (p:Place)
+WHERE p.rating > 3 AND p.num_reviews > 10
+RETURN p.name AS name
+```
+
+**Observation:**
+
+The model correctly identifies and composes multiple filtering conditions from the natural language query, mapping both constraints (`rating > 3` and `num_reviews > 10`) into the structured intent. This demonstrates the model’s ability to handle conjunctions and multi-attribute queries when expressed in familiar linguistic patterns, resulting in a valid and accurate query compilation.
+
+### Example 3 — Filtering with Ordering and Limit (Successful Case)
+
+**Natural Language Query**
+
+```text
+List the first 10 pet stores with a rating above 4 in ascending order.
+```
+
+**Predicted Intent:**
+
+```json
+{
+  "user_intent": "retrieve",
+  "schema": {
+    "aggregate": null,
+    "filters": [
+      {
+        "attribute": "rating",
+        "node_label": "Place",
+        "operator": ">",
+        "value_float": null,
+        "value_int": 4,
+        "value_str": null
+      },
+      {
+        "attribute": "type",
+        "node_label": "Place",
+        "operator": "=",
+        "value_float": null,
+        "value_int": null,
+        "value_str": "pet_store"
+      }
+    ],
+    "limit": 10,
+    "order_by": {
+      "attribute": "rating",
+      "node_label": "Place"
+    },
+    "path": [],
+    "return_attributes": [
+      "name",
+      "rating"
+    ],
+    "target": {
+      "label": "Place"
+    }
+  }
+}
+```
+
+**Generated Cypher:**
+
+```cypher
+MATCH (p:Place)
+WHERE p.rating > 4 AND p.type = 'pet_store'
+RETURN p.name AS name, p.rating AS rating
+ORDER BY p.rating ASC
+LIMIT 10
+```
+
+**Observation:**
+
+The model successfully handles a more complex query involving filtering, ordering, and limiting results. It correctly identifies multiple constraints (`rating > 4` and `type = pet_store`), applies sorting in ascending order, and enforces the result limit. This example demonstrates the model’s ability to compose multiple query components when the input follows familiar structural and linguistic patterns.
+
 ## 6. Discussion
 
 ### 6.0 Experimental Status
