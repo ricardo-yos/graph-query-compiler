@@ -668,6 +668,152 @@ The model correctly identifies the relevant attribute (`total_resident_populatio
 
 Across these examples, the model demonstrates partial understanding of query structure, correctly identifying key components such as filters and aggregation intent. However, consistent limitations are observed in structural composition, relational reasoning, and handling of linguistic nuances such as superlatives. These patterns indicate that while the model captures local aspects of the query, it struggles to fully represent the complete intent in a structurally consistent manner.
 
+### 5.3 Failure Cases
+
+#### Example 7 — Failure to Compose Ranking and Relational Constraints
+
+**Natural Language Query**
+
+```text
+Which are the best veterinary clinics in the Centro neighborhood?
+```
+
+**Predicted Intent:**
+
+```json
+// No intent generated
+```
+
+**Generated Cypher:**
+
+```cypher
+// No query generated
+```
+
+**Observation**
+
+The model fails to produce any structured output for this query, generating neither a valid intent nor a compiled Cypher query. This behavior suggests a breakdown in the inference process when handling composite queries that combine ranking semantics (“best”) with relational constraints (“Centro neighborhood”). While limited linguistic coverage may contribute, the failure primarily reflects an inability to map compositional semantic requirements into a coherent structured representation. This represents a critical failure mode, as the system is unable to recover even a partial interpretation of the query.
+
+#### Example 8 — Attribute Misalignment
+
+**Natural Language Query**
+
+```text
+Which places have good service?
+```
+
+**Predicted Intent:**
+
+```json
+{
+  "user_intent": "retrieve",
+  "schema": {
+    "aggregate": null,
+    "filters": [
+      {
+        "attribute": "rating",
+        "node_label": "Place",
+        "operator": ">",
+        "value_float": null,
+        "value_int": 3,
+        "value_str": null
+      },
+      {
+        "attribute": "type",
+        "node_label": "Place",
+        "operator": "=",
+        "value_float": null,
+        "value_int": null,
+        "value_str": "pet_store"
+      }
+    ],
+    "limit": null,
+    "order_by": null,
+    "path": [],
+    "return_attributes": [
+      "name"
+    ],
+    "target": {
+      "label": "Place"
+    }
+  }
+}
+```
+
+**Generated Cypher:**
+
+```cypher
+MATCH (p:Place)
+WHERE p.rating > 3 AND p.type = 'pet_store'
+RETURN p.name AS name
+```
+
+**Observation**
+
+The model attempts to interpret the vague expression “good service” by mapping it to a proxy attribute (`rating > 3`), despite the absence of an explicit schema-defined representation for service quality. Additionally, it introduces an unrelated constraint (`type = pet_store`), which is not present in the original query. This results in a semantically incorrect and overly constrained query. The example highlights a limitation in handling abstract or subjective language, where the model relies on heuristic associations rather than grounded schema mappings, leading to attribute misalignment and unintended constraints.
+
+#### Example 9 — Failure to Handle Relational Constraint
+
+**Natural Language Query**
+
+```text
+Which pet stores are located in the Jardim neighborhood?
+```
+
+**Predicted Intent:**
+
+```json
+// No intent generated
+```
+
+**Generated Cypher:**
+
+```cypher
+// No query generated
+```
+
+**Observation**
+
+The model fails to generate any structured output for this query, producing neither an intent nor a Cypher query. This failure occurs in a scenario that requires a relatively simple relational constraint—linking `Place` to `Neighborhood`. Despite the straightforward nature of the query, the model is unable to construct the necessary relationship path or represent the location constraint. This suggests a limitation in handling relational patterns, indicating weak generalization and lack of robustness beyond familiar training distributions.
+
+#### Example 10 — Failure to Handle Relational Filtering with Attribute Constraint
+
+**Natural Language Query**
+
+```text
+Which neighborhoods have places with ratings greater than 4?
+```
+
+**Predicted Intent:**
+
+```json
+// No intent generated
+```
+
+**Generated Cypher:**
+
+```cypher
+// No query generated
+```
+
+**Observation**
+
+The model fails to generate any structured output for a query that requires combining a relational constraint with an attribute-based filter. Specifically, the query involves identifying `Neighborhood` nodes based on a condition applied to related `Place` nodes (`rating > 4`), which requires constructing a traversal path and applying a filter on a connected entity.
+
+Although the underlying schema and training data include relationships between `Neighborhood` and `Place`, these relations are not consistently reflected in the natural language expressions generated during dataset construction. As a result, the model has limited exposure to such relational patterns in linguistic form, leading to failures during inference. This suggests that the issue is not solely due to model limitations, but also to insufficient alignment between structured intents and their corresponding natural language representations.
+
+Overall, this highlights a limitation in handling multi-hop relational reasoning, particularly when such patterns are underrepresented in the training data at the language level.
+
+**Summary**
+
+The failure cases reveal key limitations in the current system. The model exhibits instability during inference, in some cases failing to generate any structured output when queries require the composition of multiple semantic components, such as ranking and relational constraints. Even when outputs are produced, weaknesses in semantic grounding lead to heuristic attribute mappings and the introduction of unsupported constraints, particularly for abstract expressions like “good service.”
+
+The model also struggles with relational reasoning, often failing to construct traversal paths or represent cross-entity constraints, even in relatively simple scenarios. These issues are further amplified when multiple components must be combined within a single query.
+
+Importantly, these failures are not solely due to model limitations, but are also influenced by gaps in the dataset construction process, where structural patterns in the schema are not consistently reflected in natural language. As a result, the model has limited exposure to key compositional and relational patterns during training.
+
+Overall, the results indicate that the primary challenge lies in reliably translating compositional semantic requirements into coherent, schema-aligned structured representations under conditions of limited linguistic and structural coverage.
+
 ## 6. Discussion
 
 ### 6.0 Experimental Status
