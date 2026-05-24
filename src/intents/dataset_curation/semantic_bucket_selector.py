@@ -2,33 +2,37 @@
 Semantic Bucket Selection
 =========================
 
-Semantic diversity control mechanism for synthetic intent datasets.
+Semantic diversity balancing utilities for synthetic structural
+intent datasets.
 
-This module groups intents into semantic buckets based on structural
-characteristics and ensures balanced representation across different
-intent patterns.
+This module groups structurally similar intents into semantic buckets
+and applies configurable balancing strategies to improve dataset
+diversity and structural coverage.
 
 Purpose
 -------
-Prevent dataset collapse into overly frequent patterns, such as:
+Reduce structural imbalance caused by highly frequent query patterns,
+such as:
 
-- shallow paths dominating deeper ones
-- filter-heavy intents dominating simple retrieval intents
-- projection-heavy intents dominating minimal ones
+- shallow traversal paths dominating deeper traversals
+- filter-heavy queries dominating simple retrieval intents
+- projection-heavy structures dominating minimal projections
+- repetitive structural regimes overwhelming rarer compositions
 
-By enforcing minimum coverage across semantic buckets, the resulting
-dataset becomes more robust for:
+Balanced semantic coverage improves robustness for:
 
 - LLM fine-tuning
+- semantic parsing
 - query generalization
-- compositional reasoning training
+- compositional reasoning tasks
 
-Design principles
+Design Principles
 -----------------
-- lightweight semantic signature
-- deterministic structure
-- configurable diversity thresholds
-- pipeline-compatible filtering stage
+- lightweight structural signatures
+- deterministic semantic grouping
+- configurable diversity balancing
+- pipeline-compatible dataset filtering
+- controlled preservation of rare structures
 
 Dependencies
 ------------
@@ -42,48 +46,52 @@ import random
 
 class SemanticBucketizer:
     """
-    Builds compact semantic signatures for intents.
+    Build compact semantic signatures for structural query intents.
 
-    The signature abstracts structural properties of the intent,
-    allowing grouping by semantic complexity rather than exact schema.
+    Signatures abstract structural characteristics of an intent,
+    enabling grouping by semantic complexity rather than exact
+    schema representation.
 
-    Signature components
+    Signature Components
     --------------------
-    - primary intent type
-    - normalized path depth
-    - presence of filters
-    - presence of aggregates
-    - ordering usage
+    - structural regime
+    - normalized traversal depth
+    - filter presence
+    - aggregation presence
+    - ordering presence
     - limit usage
-    - projection size category
+    - normalized projection size
     """
 
     def bucket(self, intent):
         """
-        Generate semantic bucket signature.
+        Generate semantic bucket signature for a structural intent.
 
         Parameters
         ----------
-        intent : Intent
-            Structured intent object.
+        intent : IntentSpec
+            Structured query intent object.
 
         Returns
         -------
         tuple
-            Hashable semantic signature representing intent structure.
+            Hashable semantic signature representing structural
+            query characteristics.
         """
 
         signature = []
 
-        # primary intent category (e.g. retrieve, count, aggregate)
-        signature.append(intent.intent.type)
+        # structural regime identifier
+        signature.append(
+            intent.intent.regime or "unknown"
+        )
 
-        # normalize path depth to avoid explosion of bucket combinations
-        # depth > 2 is treated uniformly
+        # normalize traversal depth to reduce bucket sparsity
+        # all depths greater than 2 are grouped together
         depth = min(len(intent.schema_spec.path), 2)
         signature.append(f"depth_{depth}")
 
-        # structural modifiers
+        # structural modifier presence indicators
         if intent.schema_spec.filters:
             signature.append("filter")
 
@@ -96,7 +104,8 @@ class SemanticBucketizer:
         if intent.schema_spec.limit:
             signature.append("limit")
 
-        # normalize projection size to prevent sparsity
+        # normalize projection size to prevent excessive
+        # fragmentation of semantic buckets
         projections = len(intent.schema_spec.return_attributes or [])
 
         if projections == 0:
@@ -116,39 +125,40 @@ class SemanticBucketizer:
 
 class SemanticBucketSelector:
     """
-    Selects intents while preserving semantic diversity.
+    Select structural intents while preserving semantic diversity.
 
-    Applies two-stage balancing strategy:
+    Applies a two-stage semantic balancing strategy:
 
     Step 1
     ------
-    Ensure minimum representation per semantic bucket.
+    Ensure minimum representation across semantic buckets.
 
     Step 2
     ------
-    Optionally cap bucket size to prevent dominance of
-    highly frequent structural patterns.
+    Optionally cap bucket sizes to prevent highly frequent
+    structural patterns from dominating the dataset.
 
-    Configuration parameters
+    Configuration Parameters
     ------------------------
     min_per_bucket : int
-        Minimum number of examples per semantic bucket.
+        Minimum number of examples preserved per semantic bucket.
 
     max_per_bucket : int or None
-        Maximum number of examples per bucket.
+        Maximum number of examples allowed per bucket.
 
     enable_semantic_balance : bool
-        Toggle balancing behavior.
+        Enable or disable semantic balancing behavior.
     """
 
     def __init__(self, config):
         """
-        Initialize selector.
+        Initialize semantic diversity selector.
 
         Parameters
         ----------
         config : object
-            Configuration object containing balancing parameters.
+            Configuration object containing semantic balancing
+            parameters and selection policies.
         """
 
         self.config = config
@@ -162,26 +172,32 @@ class SemanticBucketSelector:
 
     def select(self, intents):
         """
-        Apply semantic diversity filtering to intent list.
+        Apply semantic diversity balancing to structural intents.
+
+        The balancing process:
+
+        1. groups intents into semantic buckets
+        2. guarantees minimum bucket representation
+        3. optionally limits dominant bucket sizes
 
         Parameters
         ----------
         intents : list
-            List of structured intents.
+            List of structural intent objects.
 
         Returns
         -------
         list
-            Balanced list of intents.
+            Semantically balanced structural intent dataset.
         """
 
-        # bypass if balancing disabled
+        # bypass balancing when semantic diversity control is disabled
         if not getattr(self.config, "enable_semantic_balance", False):
             return intents
 
         grouped = defaultdict(list)
 
-        # group intents by semantic signature
+        # group intents by semantic structural signature
         for intent in intents:
 
             bucket = self.bucketizer.bucket(intent)
@@ -190,8 +206,8 @@ class SemanticBucketSelector:
 
         print(f"Semantic buckets discovered: {len(grouped)}")
 
-        # shuffle examples within each bucket
-        # avoids structural bias during selection
+        # shuffle bucket contents to reduce ordering bias
+        # during dataset selection
         for items in grouped.values():
 
             random.shuffle(items)
@@ -199,7 +215,7 @@ class SemanticBucketSelector:
         dataset = []
 
         # ------------------------
-        # step 1 — ensure minimum diversity
+        # # step 1 — guarantee minimum semantic coverage
         # ------------------------
 
         for bucket, items in grouped.items():
@@ -208,11 +224,12 @@ class SemanticBucketSelector:
 
             dataset.extend(items[:take])
 
-            # store remaining examples for optional inclusion
+            # preserve remaining examples for optional expansion
             grouped[bucket] = items[take:]
 
         # ------------------------
-        # step 2 — optionally expand dataset
+        # step 2 — optionally expand dataset while controlling
+        # dominance of highly frequent structural patterns
         # ------------------------
 
         for bucket, items in grouped.items():
@@ -223,7 +240,7 @@ class SemanticBucketSelector:
 
             else:
 
-                # count current representation in dataset
+                # compute current bucket representation in dataset
                 current = sum(
                     1
                     for x in dataset
