@@ -2,30 +2,44 @@
 Intent Semantic Rules
 =====================
 
-Declarative rule set defining which attributes, entities, and
-intent components are considered valid and meaningful for
-Natural Language (NL) interaction.
+Declarative semantic configuration for structural graph query intents.
 
-This module centralizes domain-level semantic knowledge used
-across the intent pipeline, including:
+This module centralizes domain-level semantic constraints and
+natural-language visibility rules used across the intent pipeline.
 
-- Natural-language visibility constraints
-- Human-known attribute definitions
-- Allowed count targets
-- Attribute value semantic types
+The definitions provided here support:
 
-This file is intentionally declarative:
+- semantic validation
+- operator compatibility policies
+- natural-language query generation
+- attribute visibility constraints
+- semantic consistency enforcement
 
-- No executable logic
-- No validation code
-- No schema traversal
+Semantic Configuration Includes
+-------------------------------
+- natural-language visible attributes
+- semantically valid count targets
+- attribute semantic value types
 
-All structural and semantic enforcement is handled by
-validator and policy components in the pipeline.
+Design Principles
+-----------------
+- declarative-only configuration
+- centralized semantic definitions
+- schema-independent semantic policies
+- reusable validation metadata
+- pipeline-wide semantic consistency
+
+Notes
+-----
+This module intentionally contains no executable validation logic,
+schema traversal behavior or structural query generation.
+
+All semantic enforcement is implemented by validator and policy
+components elsewhere in the pipeline.
 
 Dependencies
 ------------
-- None (pure configuration module)
+None (pure declarative configuration module)
 """
 
 
@@ -33,8 +47,8 @@ Dependencies
 # Natural-language visible attributes
 # --------------------------------------------------
 
-# Attributes that can reasonably appear explicitly
-# in Natural Language (NL) queries.
+# Attributes that can naturally appear in explicit
+# natural-language graph queries.
 NL_VISIBLE_ATTRIBUTES = {
 
     "Place": {
@@ -65,47 +79,9 @@ NL_VISIBLE_ATTRIBUTES = {
         "date",
     },
 
-    # Intersections are rarely mentioned directly,
-    # but connectivity-related properties may be queried
-    "Intersection": {
-        "street_count",
-    },
-}
-
-
-# --------------------------------------------------
-# Human-known attributes
-# --------------------------------------------------
-
-# Attributes that a user is realistically expected
-# to know or provide at query time.
-HUMAN_KNOWN_ATTRIBUTES = {
-
-    "Place": {
-        "name",
-        "type",
-        "rating",
-    },
-
-    "Neighborhood": {
-        "name",
-        "total_resident_population",
-    },
-
-    "Road": {
-        "name",
-        "highway",
-        "maxspeed",
-        "oneway",
-    },
-
-    # Reviews are generally unknown beforehand,
-    # except possibly by author name
-    "Review": {
-        "author",
-        "rating",
-    },
-
+    # Intersections are rarely referenced directly in NL,
+    # but connectivity-related properties may still appear
+    # in structural graph queries.
     "Intersection": {
         "street_count",
     },
@@ -116,8 +92,8 @@ HUMAN_KNOWN_ATTRIBUTES = {
 # Allowed count targets
 # --------------------------------------------------
 
-# Entity labels for which count-style questions
-# are meaningful and natural in NL.
+# Entity labels for which count-style questions are
+# semantically meaningful in natural language.
 ALLOWED_COUNT_LABELS = {
     "Place",
     "Neighborhood",
@@ -131,9 +107,13 @@ ALLOWED_COUNT_LABELS = {
 # Attribute value semantic types
 # --------------------------------------------------
 
-# Defines the expected semantic type of attribute values.
-# Used by validators and operator policies to ensure
-# semantic consistency between attributes and operators.
+# Defines expected semantic value types for attributes.
+#
+# Used by semantic validators and operator policies to
+# enforce compatibility between:
+# - attributes
+# - operators
+# - sampled filter values
 ATTRIBUTE_VALUE_TYPES = {
 
     "Place": {
@@ -161,7 +141,8 @@ ATTRIBUTE_VALUE_TYPES = {
         "rating": (int, float),
         "text": str,
         "author": str,
-        # stored as string to allow flexible NL temporal expressions
+        # stored as string to support flexible natural-language
+        # temporal expressions and partial date references
         "date": str,
     },
 
