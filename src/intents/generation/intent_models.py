@@ -4,16 +4,25 @@ Intent Specification Models
 
 Canonical data models representing structured graph query intents.
 
-These models define the contract between:
-- structural generator
-- natural language generation pipeline
-- downstream semantic parsing tasks
+These models define the structural contract shared across:
 
-Design goals:
+- combinatorial intent generation
+- natural language generation pipelines
+- semantic parsing systems
+- dataset serialization and validation
+
+Design Goals
+------------
 - enforce schema consistency
-- prevent silent field drift
+- prevent silent schema drift
 - support deterministic dataset generation
-- preserve compatibility with existing datasets
+- preserve backward compatibility with existing datasets
+- centralize structural query representation
+
+Notes
+-----
+These models represent structural query intent specifications,
+not executable queries or natural language text.
 """
 
 from typing import List, Optional, Dict, Any
@@ -25,26 +34,17 @@ from pydantic import BaseModel, Field, ConfigDict
 # Enums
 # --------------------------------------------------
 
-class PrimaryIntent(str, Enum):
-    """
-    High-level intent category.
-
-    Currently only retrieval is supported, but the enum
-    allows future expansion (e.g., compare, recommend).
-    """
-
-    RETRIEVE = "retrieve"
-
-
 class StructuralModifier(str, Enum):
     """
-    Structural operators applied to the base retrieval intent.
+    Structural operators applied to a base retrieval intent.
 
-    These modifiers determine how the query structure is expanded.
+    Modifiers describe how the query structure is expanded beyond
+    simple entity retrieval.
     """
 
     FILTER = "filter"
     AGGREGATE = "aggregate"
+    COUNT = "count"
     ORDER_BY = "order_by"
     LIMIT = "limit"
 
@@ -55,11 +55,18 @@ class StructuralModifier(str, Enum):
 
 class AttributeFilter(BaseModel):
     """
-    Represents a constraint applied to a node attribute.
+    Represents an attribute constraint applied to a graph node.
 
-    Example:
-        Movie.rating > 8
-        Person.birth_year >= 1990
+    Examples
+    --------
+    Movie.rating > 8
+    Person.birth_year >= 1990
+    Business.city = "Santo André"
+
+    Notes
+    -----
+    The value field supports flexible typing to accommodate
+    numeric, categorical and textual constraints.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -80,12 +87,17 @@ class AttributeFilter(BaseModel):
 
 class AggregateSpec(BaseModel):
     """
-    Represents an aggregation operation applied to the result set.
+    Represents an aggregation operation applied to query results.
 
-    Examples:
-        avg(Movie.rating)
-        count(*)
-        max(Movie.revenue)
+    Examples
+    --------
+    avg(Movie.rating)
+    count(*)
+    max(Movie.revenue)
+
+    Notes
+    -----
+    A null attribute supports global aggregations such as COUNT(*).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -102,23 +114,33 @@ class AggregateSpec(BaseModel):
 
 class IntentCore(BaseModel):
     """
-    High-level description of the user's query goal.
+    High-level structural description of a query intent.
 
-    Contains semantic intent information independent of graph structure.
+    Stores structural metadata independent from graph traversal
+    specification, including:
+
+    - generation regime
+    - structural modifiers
+    - query expansion characteristics
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    type: PrimaryIntent = PrimaryIntent.RETRIEVE
-
-    # structural operators applied to the base intent
-    modifiers: List[StructuralModifier] = Field(default_factory=list)
-
     regime: Optional[str] = Field(
         default=None,
+        description=(
+            "Structural query regime identifier responsible for "
+            "generating the intent specification."
+        ),
+    )
 
-        # helps trace which generation configuration produced the intent
-        description="Structural generation regime identifier"
+    # structural operators applied to the base intent
+    modifiers: List[StructuralModifier] = Field(
+        default_factory=list,
+        description=(
+            "Structural modifiers applied to the base query intent "
+            "(e.g. FILTER, AGGREGATE, COUNT, ORDER_BY, LIMIT)."
+        ),
     )
 
 
@@ -128,32 +150,40 @@ class IntentCore(BaseModel):
 
 class SchemaSpec(BaseModel):
     """
-    Graph query structure specification.
+    Structural graph query specification.
 
-    Defines how the intent maps to graph traversal operations.
+    Defines how the intent maps to graph traversal operations,
+    including:
+
+    - target entities
+    - traversal paths
+    - attribute constraints
+    - aggregation behavior
+    - ordering rules
+    - result limits
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    # main entity being queried
+    # main entity returned by the query
     target: Dict[str, Any]
 
-    # traversal chain connecting entities
+    # traversal specification connecting graph entities
     path: List[Dict[str, Any]] = Field(default_factory=list)
 
-    # attribute constraints applied to nodes
+    # attribute constraints applied across query nodes
     filters: List[AttributeFilter] = Field(default_factory=list)
 
-    # ordering criteria
+    # result ordering specification
     order_by: Optional[Dict[str, Any]] = None
 
     # maximum number of returned results
     limit: Optional[int] = None
 
-    # aggregation specification
+    # aggregation operation specification
     aggregate: Optional[AggregateSpec] = None
 
-    # attributes returned for each matched node
+    # attributes returned for matched target nodes
     return_attributes: List[str] = Field(default_factory=list)
 
 
@@ -163,21 +193,29 @@ class SchemaSpec(BaseModel):
 
 class IntentSpec(BaseModel):
     """
-    Root container combining semantic intent and graph schema structure.
+    Canonical root representation of a structural graph query intent.
 
-    This is the canonical representation used across the pipeline.
+    Combines:
+
+    - structural intent metadata
+    - graph traversal specification
+    - query constraints
+    - structural modifiers
+
+    This model serves as the central data representation shared
+    across generation, validation and dataset export pipelines.
     """
 
     model_config = ConfigDict(
         populate_by_name=True,
 
-        # prevents silent schema drift during experimentation
+        # prevent silent schema drift during experimentation
         extra="forbid"
     )
 
     intent: IntentCore
 
-    # alias preserves compatibility with existing dataset format
+    # alias preserves backward compatibility with dataset schema
     schema_spec: SchemaSpec = Field(alias="schema")
 
     # --------------------------------------------------
@@ -186,7 +224,7 @@ class IntentSpec(BaseModel):
 
     def has_filter(self) -> bool:
         """
-        Check if the intent contains filter constraints.
+        Check whether the intent contains filter constraints.
         """
 
         return StructuralModifier.FILTER in self.intent.modifiers
@@ -194,7 +232,7 @@ class IntentSpec(BaseModel):
 
     def has_aggregate(self) -> bool:
         """
-        Check if the intent applies aggregation.
+        Check whether the intent applies aggregation operations.
         """
 
         return StructuralModifier.AGGREGATE in self.intent.modifiers
@@ -202,7 +240,7 @@ class IntentSpec(BaseModel):
 
     def has_order_by(self) -> bool:
         """
-        Check if the intent defines result ordering.
+        Check whether the intent defines result ordering.
         """
 
         return StructuralModifier.ORDER_BY in self.intent.modifiers
@@ -210,7 +248,7 @@ class IntentSpec(BaseModel):
 
     def has_limit(self) -> bool:
         """
-        Check if the intent limits the number of results.
+        Check whether the intent constrains result size.
         """
 
         return StructuralModifier.LIMIT in self.intent.modifiers
@@ -222,13 +260,19 @@ class IntentSpec(BaseModel):
 
     def to_json(self) -> str:
         """
-        Serialize intent preserving schema alias compatibility.
+        Serialize the intent preserving schema alias compatibility.
 
-        Ensures exported JSON matches the expected dataset format:
+        Ensures exported JSON matches the canonical dataset format:
+
         {
             "intent": {...},
             "schema": {...}
         }
+
+        Returns
+        -------
+        str
+            Serialized JSON representation of the intent.
         """
 
         return self.model_dump_json(by_alias=True)
