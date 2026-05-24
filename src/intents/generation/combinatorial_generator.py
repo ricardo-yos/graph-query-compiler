@@ -2,7 +2,7 @@
 Combinatorial Structural Intent Generator
 =========================================
 
-Exhaustive combinatorial generator for graph query intent structures.
+Controlled combinatorial generator for graph query intent structures.
 
 This module explores the space of possible query structures derived
 from a graph schema by systematically combining:
@@ -14,15 +14,24 @@ from a graph schema by systematically combining:
 - ordering
 - limits
 
+Generation behavior is constrained by regime-specific policies
+that control:
+
+- traversal depth
+- operator availability
+- combinatorial expansion limits
+- structural sampling strategies
+
 The generator produces structurally valid intent specifications that
-can later be converted into natural language questions or queries.
+can later be converted into natural language questions or executable
+graph queries.
 
 Design Goals
 ------------
 - maximize structural coverage of the schema
-- produce diverse query shapes
+- produce structurally diverse query shapes
 - enforce structural validity constraints
-- support controlled combinatorial explosion via configuration
+- control combinatorial explosion through configurable policies
 - enable reproducible dataset generation
 
 Output
@@ -30,12 +39,12 @@ Output
 List[IntentSpec]
 
 Each IntentSpec encodes a structured representation of a graph query,
-including traversal path, constraints and structural modifiers.
+including traversal paths, constraints and structural modifiers.
 
 Notes
 -----
 This module does NOT generate natural language.
-It only produces structural representations.
+It only produces structural query representations.
 """
 
 import itertools
@@ -43,12 +52,12 @@ import random
 from typing import List
 
 from .policies.numeric_policy import NUMERIC_ATTRIBUTES
+from .policies.regime_policy import REGIME_POLICY
 
 from .intent_models import (
     IntentSpec,
     IntentCore,
     SchemaSpec,
-    PrimaryIntent,
     AttributeFilter,
     AggregateSpec,
     StructuralModifier,
@@ -86,12 +95,17 @@ class CombinatorialStructuralGenerator:
     - ordering strategies
     - result limits
 
-    Configuration controls combinatorial growth and structural constraints.
+    Generation behavior is governed by regime-specific policies
+    and configuration constraints that limit combinatorial growth
+    while preserving structural diversity.
     """
 
     def __init__(self, schema, config):
         self.schema = schema
         self.config = config
+        self.regime_policy = REGIME_POLICY[
+            self.config.regime_name
+        ]        
 
     # ==================================================
     # PUBLIC API
@@ -99,10 +113,13 @@ class CombinatorialStructuralGenerator:
 
     def generate(self) -> List[IntentSpec]:
         """
-        Generate all structural intents under the configured regime.
+        Generate structurally diverse intents under the configured regime.
 
-        The generation process iterates over increasing traversal depth
-        and expands each path into multiple structural variants.
+        The generation process iterates over increasing traversal depths
+        and expands each traversal path into multiple structural variants.
+
+        Expansion is constrained by regime-specific sampling and
+        combinatorial policies.
 
         Returns
         -------
@@ -110,11 +127,20 @@ class CombinatorialStructuralGenerator:
             List of structurally valid intent specifications.
         """
 
+        max_paths = self.regime_policy["max_paths"]
+        
         intents = []
 
         for depth in range(self.config.max_depth + 1):
 
             paths = self._generate_paths(depth)
+
+            if len(paths) > max_paths:
+
+                paths = random.sample(
+                    paths,
+                    max_paths
+                )
 
             for path in paths:
                 intents.extend(self._expand_path(path))
@@ -134,7 +160,7 @@ class CombinatorialStructuralGenerator:
         Generate traversal paths up to a specified depth.
 
         Paths are constructed using DFS over outgoing relationships
-        while respecting schema constraints such as:
+        while respecting schema and regime constraints such as:
 
         - allowed target labels
         - maximum traversal depth
@@ -148,7 +174,7 @@ class CombinatorialStructuralGenerator:
         Returns
         -------
         List
-            List of raw path representations.
+            List of internal traversal path representations.
         """
 
         paths = []
@@ -208,13 +234,17 @@ class CombinatorialStructuralGenerator:
         """
         Expand a traversal path into multiple structural query variants.
 
-        Each path can produce multiple intents via combinations of:
+        Each traversal path may generate multiple intent structures
+        through combinations of:
 
         - projections
         - filters
         - aggregations
         - ordering
         - limits
+
+        Expansion behavior is controlled by regime-specific policies
+        to prevent uncontrolled combinatorial growth.
         """
 
         intents = []
@@ -231,11 +261,23 @@ class CombinatorialStructuralGenerator:
 
             projections = self._expand_projections(target_label)
 
+            max_proj = self.regime_policy[
+                "max_projection_samples"
+            ]
+
+            if len(projections) > max_proj:
+
+                projections = random.sample(
+                    projections,
+                    max_proj
+                )
+
             for projection in projections:
 
                 base_intent = IntentSpec(
                     intent=IntentCore(
-                        type=PrimaryIntent.RETRIEVE,
+                        regime=self.config.regime_name,
+                        
                         modifiers=[],
                     ),
                     schema=SchemaSpec(
@@ -278,10 +320,10 @@ class CombinatorialStructuralGenerator:
 
     def _expand_projections(self, label, aggregate=None):
         """
-        Determine attribute projection combinations.
+        Generate projection combinations for a target node label.
 
-        Delegates selection logic to attribute utilities, allowing
-        centralized control of projection policies.
+        Projection selection is delegated to attribute utility policies,
+        enabling centralized control of projection behavior and sampling.
         """
 
         return get_returnable_attributes(label, aggregate)
@@ -292,14 +334,18 @@ class CombinatorialStructuralGenerator:
 
     def _expand_filters_variants(self, intents):
         """
-        Expand intents with all valid filter combinations defined
-        by the regime configuration.
+        Expand intents with structurally valid filter combinations.
 
-        Supports:
-        - single attribute filters
+        Supported behaviors include:
+
+        - single-attribute filters
         - multi-attribute filters
-        - operator constraints
-        - compatibility validation
+        - operator compatibility constraints
+        - numeric range validation
+        - mandatory filter enforcement
+
+        Expansion limits are controlled by regime and configuration
+        policies to reduce combinatorial explosion.
         """
 
         all_variants = []
@@ -314,12 +360,14 @@ class CombinatorialStructuralGenerator:
 
     def _expand_filters_single(self, intent: IntentSpec):
         """
-        Generate filter combinations for a single intent.
+        Generate filter variants for a single structural intent.
 
-        Ensures:
+        Validation guarantees:
+
         - attribute/operator compatibility
-        - no duplicated attributes in same combination
-        - numeric range consistency
+        - absence of duplicated attribute constraints
+        - numeric interval consistency
+        - mandatory filter enforcement
         """
 
         variants = []
@@ -397,7 +445,22 @@ class CombinatorialStructuralGenerator:
 
                 for k in range(2, max_k + 1):
 
-                    for combo in itertools.combinations(candidates, k):
+                    all_combos = list(
+                        itertools.combinations(candidates, k)
+                    )
+
+                    max_combos = self.regime_policy[
+                        "max_filter_combinations"
+                    ]
+
+                    if len(all_combos) > max_combos:
+
+                        all_combos = random.sample(
+                            all_combos,
+                            max_combos
+                        )
+
+                    for combo in all_combos:
 
                         # prevent duplicate attribute constraints
                         attrs = {f.attribute for f in combo}
@@ -430,9 +493,12 @@ class CombinatorialStructuralGenerator:
 
     def _filters_are_compatible(self, filters):
         """
-        Ensure numeric filter combinations define valid intervals.
+        Validate compatibility between numeric filter constraints.
 
-        Example:
+        Ensures numeric filters define logically valid intervals.
+
+        Example
+        -------
         price >= 10 AND price <= 5 -> invalid
         """
 
@@ -480,60 +546,96 @@ class CombinatorialStructuralGenerator:
 
     def _expand_aggregation(self, intents):
         """
-        Generate aggregation variants including:
+        Generate aggregation variants according to the structural regime.
 
-        - attribute aggregations (avg, min, max, sum)
-        - COUNT(*)
+        Supported aggregation behaviors
+        --------------------------------
+        - count-based aggregation:
+            COUNT(*)
+
+        - attribute aggregation:
+            AVG, MIN, MAX, SUM
+
+        Aggregation validity and availability are controlled by
+        regime-specific policies.
         """
 
         expanded = []
 
+        count_regimes = {
+            "simple_count_query",
+            "relational_count_query",
+        }
+
+        aggregation_regimes = {
+            "simple_aggregation_query",
+            "relational_aggregation_query",
+        }
+
         for intent in intents:
 
-            attributes = intent.schema_spec.return_attributes
+            regime_name = intent.intent.regime
 
-            for attr in attributes:
-
-                if not is_aggregatable(attr):
-                    continue
-
-                for fn in get_aggregate_functions(attr):
-
-                    new_intent = intent.model_copy(deep=True)
-
-                    new_intent.schema_spec.aggregate = AggregateSpec(
-                        function=fn,
-                        attribute=attr,
-                    )
-
-                    # aggregate results replace attribute projections
-                    new_intent.schema_spec.return_attributes = []
-
-                    self._add_modifier(
-                        new_intent,
-                        StructuralModifier.AGGREGATE
-                    )
-
-                    expanded.append(new_intent)
-
-            # COUNT(*) independent of attributes
-            for fn in get_aggregate_functions(None):
+            # ==========================================================
+            # COUNT REGIMES
+            # ==========================================================
+            if regime_name in count_regimes:
 
                 new_intent = intent.model_copy(deep=True)
 
                 new_intent.schema_spec.aggregate = AggregateSpec(
-                    function=fn,
+                    function="count",
                     attribute=None,
                 )
 
+                # aggregation replaces projections
                 new_intent.schema_spec.return_attributes = []
 
                 self._add_modifier(
                     new_intent,
-                    StructuralModifier.AGGREGATE
+                    StructuralModifier.COUNT
                 )
 
                 expanded.append(new_intent)
+
+                continue
+
+            # ==========================================================
+            # STANDARD AGGREGATION REGIMES
+            # ==========================================================
+            if regime_name in aggregation_regimes:
+
+                attributes = intent.schema_spec.return_attributes
+
+                for attr in attributes:
+
+                    if not is_aggregatable(attr):
+                        continue
+
+                    aggregate_functions = get_aggregate_functions(attr)
+
+                    for fn in aggregate_functions:
+
+                        # count handled separately
+                        if fn == "count":
+                            continue
+
+                        new_intent = intent.model_copy(deep=True)
+
+                        new_intent.schema_spec.aggregate = AggregateSpec(
+                            function=fn,
+                            attribute=attr,
+                        )
+
+                        # aggregation replaces projections
+                        new_intent.schema_spec.return_attributes = []
+
+                        self._add_modifier(
+                            new_intent,
+                            StructuralModifier.AGGREGATE
+                        )
+
+                        expanded.append(new_intent)
 
         return expanded
 
@@ -543,9 +645,10 @@ class CombinatorialStructuralGenerator:
 
     def _expand_order_by(self, intents):
         """
-        Generate ranking variants based on orderable attributes.
+        Generate ordering variants using orderable attributes.
 
-        Aggregated intents can only be ordered by the aggregated attribute.
+        Aggregated intents may only be ordered by the aggregated
+        attribute to preserve structural consistency.
         """
 
         expanded = []
@@ -566,6 +669,17 @@ class CombinatorialStructuralGenerator:
             else:
 
                 attributes = get_orderable_attributes(label)
+
+            max_attrs = self.regime_policy[
+                "max_order_attributes"
+            ]
+
+            if max_attrs > 0 and len(attributes) > max_attrs:
+
+                attributes = random.sample(
+                    attributes,
+                    max_attrs
+                )
 
             for attr in attributes:
 
@@ -594,13 +708,29 @@ class CombinatorialStructuralGenerator:
     def _expand_limit(self, intents):
         """
         Generate variants with result size constraints.
+
+        Limit values are sampled according to regime-specific
+        combinatorial policies.
         """
 
         expanded = []
 
         for intent in intents:
 
-            for value in self.config.limit_values:
+            limit_values = self.config.limit_values
+
+            max_limits = self.regime_policy[
+                "max_limit_variants"
+            ]
+
+            if max_limits > 0 and len(limit_values) > max_limits:
+
+                limit_values = random.sample(
+                    limit_values,
+                    max_limits
+                )
+
+            for value in limit_values:
 
                 new_intent = intent.model_copy(deep=True)
 
@@ -621,7 +751,7 @@ class CombinatorialStructuralGenerator:
 
     def _add_modifier(self, intent, modifier):
         """
-        Register structural modifier if not already present.
+        Register a structural modifier if not already present.
         """
 
         if modifier not in intent.intent.modifiers:
@@ -629,7 +759,7 @@ class CombinatorialStructuralGenerator:
 
     def _get_target_candidates(self, path):
         """
-        Determine valid target node from traversal path.
+        Determine valid target node candidates from a traversal path.
         """
 
         last_step = path[-1]
@@ -641,7 +771,8 @@ class CombinatorialStructuralGenerator:
 
     def _build_path_spec(self, raw_path):
         """
-        Convert internal path representation into schema format.
+        Convert an internal traversal path representation into
+        schema-compatible path specification format.
         """
 
         path_spec = []
@@ -666,7 +797,7 @@ class CombinatorialStructuralGenerator:
 
     def _get_all_labels(self, intent):
         """
-        Collect all node labels involved in the query structure.
+        Collect all node labels involved in a structural query intent.
         """
 
         labels = set()
@@ -682,9 +813,10 @@ class CombinatorialStructuralGenerator:
 
     def _deduplicate(self, intents):
         """
-        Remove structurally identical intents.
+        Remove structurally duplicated intents.
 
-        Uses serialized representation as structural fingerprint.
+        Structural identity is determined using serialized intent
+        representations as structural fingerprints.
         """
 
         seen = set()
