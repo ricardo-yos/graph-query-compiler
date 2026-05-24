@@ -194,11 +194,12 @@ def build_config_from_regime(base_config, regime_name, regime):
 
 def generate_intents_by_regime(schema, base_config):
     """
-    Generates intents separately for each structural regime.
+    Generate intents separately for each structural regime.
 
     This ensures coverage across multiple levels of query complexity.
 
-    Examples of regimes:
+    Examples of regimes
+    -------------------
     - simple lookup
     - multi-hop traversal
     - analytical queries with aggregation
@@ -212,7 +213,7 @@ def generate_intents_by_regime(schema, base_config):
     Returns
     -------
     list
-        generated intent objects
+        Generated intent objects.
     """
 
     regimes = load_regime_types()
@@ -231,14 +232,10 @@ def generate_intents_by_regime(schema, base_config):
 
         generator = CombinatorialStructuralGenerator(
             schema=schema,
-            config=regime_config
+            config=regime_config,
         )
 
         intents = generator.generate()
-
-        # attach regime label for later balancing
-        for intent in intents:
-            intent.intent.regime = regime_name
 
         print(f"Generated: {len(intents)}")
 
