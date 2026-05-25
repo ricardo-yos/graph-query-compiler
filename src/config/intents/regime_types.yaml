@@ -1,70 +1,103 @@
 # ======================================================
 # STRUCTURAL QUERY REGIMES
 # ======================================================
-# Defines the structural diversity of graph queries
-# generated in the combinatorial dataset.
+# Declarative structural regimes used by the combinatorial
+# graph query intent generator.
 #
-# Each regime controls:
+# Each regime defines the structural constraints and
+# semantic behaviors allowed during intent expansion.
+#
+# Regime configuration controls:
 # - graph traversal depth
-# - use of filters
-# - use of aggregation
+# - aggregation availability
 # - ranking behavior
+# - filter complexity
+# - ordering support
+# - result limiting support
+#
+# Regime Categories
+# -----------------
+# simple_*:
+#   Queries without graph traversal paths.
+#
+# relational_*:
+#   Queries containing graph traversal relationships.
+#
+# lookup_query:
+#   Standard retrieval queries without aggregation.
+#
+# count_query:
+#   COUNT(*) aggregation queries.
+#
+# aggregation_query:
+#   Numeric aggregation queries such as:
+#   SUM, AVG, MIN and MAX.
+#
+# ranking_query:
+#   Ordered queries using ORDER BY and LIMIT.
+#
+# Design Principles
+# -----------------
+# - declarative-only configuration
+# - deterministic structural constraints
+# - regime-specific query generation
+# - controlled combinatorial expansion
+# - natural-language-compatible query patterns
 # ======================================================
 
 regimes:
 
-  lookup_basic:
+  simple_lookup_query:
 
     max_depth: 0
     allow_aggregation: false
     allow_order_by: false
     allow_limit: false
-    allow_multiple_filters: false
-    max_filters_per_node: 0
+    allow_multiple_filters: true
+    max_filters_per_node: 4
 
 
-  lookup_with_path:
+  simple_count_query:
+
+    max_depth: 0
+    allow_aggregation: true
+    allow_order_by: false
+    allow_limit: false
+    allow_multiple_filters: true
+    max_filters_per_node: 4
+
+
+  simple_aggregation_query:
+
+    max_depth: 0
+    allow_aggregation: true
+    allow_order_by: false
+    allow_limit: false
+    allow_multiple_filters: true
+    max_filters_per_node: 4
+
+
+  simple_ranking_query:
+
+    max_depth: 0
+    allow_aggregation: false
+    allow_order_by: true
+    allow_limit: true
+    allow_multiple_filters: true
+    max_filters_per_node: 2
+
+
+  relational_lookup_query:
 
     max_depth: 1
     allow_aggregation: false
     allow_order_by: false
     allow_limit: false
-    allow_multiple_filters: false
-    max_filters_per_node: 1
-
-
-  filtered_lookup:
-
-    max_depth: 1   # allows relational filtering
-    allow_aggregation: false
-    allow_order_by: false
-    allow_limit: false
     allow_multiple_filters: true
     max_filters_per_node: 3
 
 
-  count_query:
-
-    max_depth: 0
-    allow_aggregation: true
-    aggregate_functions: ["count"]
-    allow_order_by: false
-    allow_limit: false
-    allow_multiple_filters: true
-    max_filters_per_node: 3
-
-
-  aggregate_query:
-
-    max_depth: 0
-    allow_aggregation: true
-    allow_order_by: false
-    allow_limit: false
-    allow_multiple_filters: true
-    max_filters_per_node: 3
-
-
-  aggregate_with_path:
+  relational_count_query:
 
     max_depth: 1
     allow_aggregation: true
@@ -74,21 +107,21 @@ regimes:
     max_filters_per_node: 3
 
 
-  ranking_query:
+  relational_aggregation_query:
+
+    max_depth: 1
+    allow_aggregation: true
+    allow_order_by: false
+    allow_limit: false
+    allow_multiple_filters: true
+    max_filters_per_node: 3
+
+
+  relational_ranking_query:
 
     max_depth: 1
     allow_aggregation: false
     allow_order_by: true
     allow_limit: true
-    allow_multiple_filters: false
-    max_filters_per_node: 0
-
-
-  ranking_with_filter:
-
-    max_depth: 1
-    allow_aggregation: false
-    allow_order_by: true
-    allow_limit: true
     allow_multiple_filters: true
-    max_filters_per_node: 3
+    max_filters_per_node: 2
