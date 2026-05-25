@@ -2,50 +2,58 @@
 Intent Validation Logic
 =======================
 
-Semantic validation layer responsible for filtering structured
-intents before they are accepted into downstream pipeline stages.
+Semantic validation layer for structured graph query intents.
 
-This module ensures that generated intents are:
+This module validates whether generated intents are structurally
+consistent, semantically meaningful and compatible with the
+constraints defined by the intent generation pipeline.
 
-- structurally consistent
-- semantically meaningful
-- compatible with Natural Language (NL) expression
-- aligned with domain constraints
+Validation is performed declaratively using semantic definitions
+provided by `intent_semantic_rules`.
 
-Validation is performed declaratively using rules defined in
-`intent_semantic_rules`.
+Validation Scope
+----------------
+- intent metadata structure
+- target node definitions
+- return attribute visibility
+- filter semantic compatibility
+- ORDER BY constraints
+- LIMIT constraints
+- traversal path consistency
+- aggregation validity
+- regime/path compatibility
 
-Scope of validation
--------------------
-- target structure
-- return attributes
-- filter definitions
-- ordering clauses
-- aggregation rules
-- path constraints
-- attribute semantic types
+Validation Responsibilities
+---------------------------
+- prevent structurally invalid intents
+- enforce semantic compatibility between attributes and values
+- restrict unsupported aggregation behaviors
+- ensure regime-specific structural consistency
+- guarantee compatibility with natural-language query patterns
 
 This module does NOT:
+---------------------
 - generate intents
-- modify intents
-- traverse graph schema
+- modify intent structures
+- traverse graph schemas
 - perform scoring or ranking
+- sample filter values
 
-Used by
+Used By
 -------
-- dataset generation pipeline
-- structural generator filtering stage
-- intent quality control
+- structural dataset generation pipeline
+- combinatorial intent generator
+- semantic filtering stages
+- dataset quality control
 
 Dependencies
 ------------
-intent_semantic_rules :
-    Declarative semantic definitions used for validation.
+intent_semantic_rules
+    Declarative semantic definitions and attribute policies.
 """
 
 from .intent_semantic_rules import (
     NL_VISIBLE_ATTRIBUTES,
-    HUMAN_KNOWN_ATTRIBUTES,
     ALLOWED_COUNT_LABELS,
     ATTRIBUTE_VALUE_TYPES,
 )
@@ -55,9 +63,34 @@ from .intent_semantic_rules import (
 # Global semantic constraints
 # --------------------------------------------------
 
-# Maximum number of relationship hops allowed in path traversal.
-# Prevents overly complex graph queries unlikely to appear in NL.
+# Maximum number of traversal hops allowed in graph paths.
+# Prevents overly complex query structures unlikely to appear
+# naturally in NL graph querying scenarios.
 MAX_PATH_LENGTH = 3
+
+# Structural regimes that represent count queries.
+COUNT_REGIMES = {
+    "simple_count_query",
+    "relational_count_query",
+}
+
+# Structural regimes that support numeric aggregations.
+AGGREGATION_REGIMES = {
+    "simple_aggregation_query",
+    "relational_aggregation_query",
+}
+
+# Structural regimes representing direct retrieval queries.
+LOOKUP_REGIMES = {
+    "simple_lookup_query",
+    "relational_lookup_query",
+}
+
+# Structural regimes that require ordering and limiting behavior.
+RANKING_REGIMES = {
+    "simple_ranking_query",
+    "relational_ranking_query",
+}
 
 
 # --------------------------------------------------
@@ -66,19 +99,37 @@ MAX_PATH_LENGTH = 3
 
 def get_schema(intent: dict) -> dict:
     """
-    Extract schema specification from intent.
+    Extract schema specification from structured intent object.
 
     Parameters
     ----------
     intent : dict
-        Full intent object.
+        Full structured intent.
 
     Returns
     -------
     dict
-        Schema specification section of the intent.
+        Schema specification section.
     """
     return intent.get("schema_spec", {})
+
+
+def get_intent_meta(intent: dict) -> dict:
+    """
+    Extract semantic intent metadata.
+
+    Parameters
+    ----------
+    intent : dict
+        Full structured intent.
+
+    Returns
+    -------
+    dict
+        Intent metadata section.
+    """
+
+    return intent.get("intent", {})
 
 
 # --------------------------------------------------
@@ -87,60 +138,74 @@ def get_schema(intent: dict) -> dict:
 
 def is_nl_visible(label: str, attribute: str) -> bool:
     """
-    Check whether attribute can appear explicitly in NL queries.
+    Check whether an attribute can appear explicitly in
+    natural-language graph queries.
 
     Parameters
     ----------
     label : str
-        Node label.
+        Entity label.
+
     attribute : str
         Attribute name.
 
     Returns
     -------
     bool
+        True if attribute is NL-visible.
     """
     return attribute in NL_VISIBLE_ATTRIBUTES.get(label, set())
 
 
-def is_human_known(label: str, attribute: str) -> bool:
+def is_numeric_type(expected_type) -> bool:
     """
-    Check whether attribute is realistically known by the user.
+    Check whether semantic attribute type is numeric.
 
     Parameters
     ----------
-    label : str
-        Node label.
-    attribute : str
-        Attribute name.
+    expected_type
+        Semantic type definition.
 
     Returns
     -------
     bool
+        True if numeric-compatible.
     """
-    return attribute in HUMAN_KNOWN_ATTRIBUTES.get(label, set())
+
+    return expected_type in [(int, float), int, float]
 
 
 def is_value_type_valid(label: str, attribute: str, value) -> bool:
     """
-    Validate semantic compatibility between attribute and value.
+    Validate semantic compatibility between attribute and filter value.
 
-    Allows light coercion for common NL representations:
-    - numeric values as strings ("4.5")
-    - boolean values as strings ("true", "yes")
+    Supports lightweight coercion for common natural-language
+    representations, including:
+
+    - numeric values represented as strings
+    - boolean values represented with NL terms
+
+    Examples
+    --------
+    "4.5" -> float
+    "yes" -> bool
+    "true" -> bool
 
     Parameters
     ----------
     label : str
-        Node label.
+        Entity label.
+
     attribute : str
         Attribute name.
+
     value :
-        Value provided in filter.
+        Filter value.
 
     Returns
     -------
     bool
+        True if value is semantically compatible.
     """
 
     expected_type = ATTRIBUTE_VALUE_TYPES.get(label, {}).get(attribute)
@@ -150,6 +215,18 @@ def is_value_type_valid(label: str, attribute: str, value) -> bool:
 
     if isinstance(value, expected_type):
         return True
+
+    # numeric values expressed as strings
+    if is_numeric_type(expected_type):
+
+        if isinstance(value, str):
+
+            try:
+                float(value)
+                return True
+
+            except ValueError:
+                return False
 
     # allow numeric values expressed as strings
     if expected_type in [(int, float), int, float]:
@@ -162,7 +239,15 @@ def is_value_type_valid(label: str, attribute: str, value) -> bool:
 
     # allow boolean values expressed in NL
     if expected_type is bool and isinstance(value, str):
-        if value.lower() in {"true", "false", "1", "0", "yes", "no"}:
+
+        if value.lower() in {
+            "true",
+            "false",
+            "1",
+            "0",
+            "yes",
+            "no",
+        }:
             return True
 
     return False
@@ -176,32 +261,36 @@ def validate_intent_meta(intent: dict) -> bool:
     """
     Validate high-level intent metadata structure.
 
-    Ensures presence and type correctness of:
-    - intent type
-    - modifiers
+    Checks:
+    - metadata structure validity
+    - regime type integrity
+    - modifier list consistency
 
     Parameters
     ----------
     intent : dict
+        Structured intent.
 
     Returns
     -------
     bool
+        True if metadata is valid.
     """
 
-    meta = intent.get("intent")
+    meta = get_intent_meta(intent)
 
     if not isinstance(meta, dict):
         return False
 
-    intent_type = meta.get("type")
+    regime = meta.get("regime")
 
-    if not isinstance(intent_type, str):
+    if regime is not None and not isinstance(regime, str):
         return False
 
     modifiers = meta.get("modifiers")
 
     if modifiers is not None:
+
         if not isinstance(modifiers, list):
             return False
 
@@ -217,15 +306,22 @@ def validate_intent_meta(intent: dict) -> bool:
 
 def validate_target(intent: dict) -> bool:
     """
-    Validate presence and structure of target node.
+    Validate target node structure.
+
+    Checks:
+    - target existence
+    - target structural integrity
+    - label validity
 
     Parameters
     ----------
     intent : dict
+        Structured intent.
 
     Returns
     -------
     bool
+        True if target structure is valid.
     """
 
     schema = get_schema(intent)
@@ -249,17 +345,22 @@ def validate_target(intent: dict) -> bool:
 
 def validate_return_attributes(intent: dict) -> bool:
     """
-    Validate attributes requested in SELECT clause.
+    Validate requested return attributes.
 
-    Ensures attributes are NL-visible.
+    Ensures:
+    - return_attributes is structurally valid
+    - attributes are NL-visible
+    - attributes are compatible with target entity
 
     Parameters
     ----------
     intent : dict
+        Structured intent.
 
     Returns
     -------
     bool
+        True if return attributes are valid.
     """
 
     schema = get_schema(intent)
@@ -289,17 +390,20 @@ def validate_filters(intent: dict) -> bool:
     Validate filter clause semantic consistency.
 
     Checks:
+    - filter structural integrity
     - attribute existence
-    - semantic value compatibility
-    - structural integrity
+    - semantic type compatibility
+    - filter value validity
 
     Parameters
     ----------
     intent : dict
+        Structured intent.
 
     Returns
     -------
     bool
+        True if filters are semantically valid.
     """
 
     schema = get_schema(intent)
@@ -316,24 +420,26 @@ def validate_filters(intent: dict) -> bool:
 
         label = f.get("node_label")
         attr = f.get("attribute")
-        value = f.get("value")
 
-        if not label or not attr:
+        if not isinstance(label, str):
+            return False
+
+        if not isinstance(attr, str):
             return False
 
         if ATTRIBUTE_VALUE_TYPES.get(label, {}).get(attr) is None:
             return False
 
+        value = (
+            f.get("value")
+            or f.get("value_int")
+            or f.get("value_float")
+            or f.get("value_str")
+        )
+
         if value is not None:
+
             if not is_value_type_valid(label, attr, value):
-                return False
-
-        else:
-
-            if not isinstance(label, str):
-                return False
-
-            if not isinstance(attr, str):
                 return False
 
     return True
@@ -345,37 +451,60 @@ def validate_filters(intent: dict) -> bool:
 
 def validate_order_by(intent: dict) -> bool:
     """
-    Validate ORDER BY clause attributes.
+    Validate ORDER BY clause consistency.
+
+    Checks:
+    - ranking regimes require ordering
+    - ordering attribute existence
+    - ordering direction validity
+    - attribute compatibility
 
     Parameters
     ----------
     intent : dict
+        Structured intent.
 
     Returns
     -------
     bool
+        True if ORDER BY is valid.
     """
 
     schema = get_schema(intent)
 
+    meta = get_intent_meta(intent)
+
+    regime = meta.get("regime")
+
     order_by = schema.get("order_by")
+
+    # ranking regimes require ordering
+    if regime in RANKING_REGIMES:
+
+        if order_by is None:
+            return False
 
     if order_by is None:
         return True
 
-    if not isinstance(order_by, list):
+    # current schema uses single dict
+    if not isinstance(order_by, dict):
         return False
 
-    for ob in order_by:
+    label = schema.get("target", {}).get("label")
 
-        label = ob.get("node_label")
-        attr = ob.get("attribute")
+    attr = order_by.get("attribute")
 
-        if not label or not attr:
-            return False
+    if not attr:
+        return False
 
-        if ATTRIBUTE_VALUE_TYPES.get(label, {}).get(attr) is None:
-            return False
+    if ATTRIBUTE_VALUE_TYPES.get(label, {}).get(attr) is None:
+        return False
+
+    direction = order_by.get("direction")
+
+    if direction not in {"asc", "desc"}:
+        return False
 
     return True
 
@@ -386,20 +515,37 @@ def validate_order_by(intent: dict) -> bool:
 
 def validate_limit(intent: dict) -> bool:
     """
-    Validate LIMIT clause constraints.
+    Validate LIMIT clause consistency.
+
+    Checks:
+    - ranking regimes require limits
+    - limit type validity
+    - positive integer constraints
 
     Parameters
     ----------
     intent : dict
+        Structured intent.
 
     Returns
     -------
     bool
+        True if LIMIT is valid.
     """
 
     schema = get_schema(intent)
 
+    meta = get_intent_meta(intent)
+
+    regime = meta.get("regime")
+
     limit = schema.get("limit")
+
+    # ranking queries require limit
+    if regime in RANKING_REGIMES:
+
+        if limit is None:
+            return False
 
     if limit is None:
         return True
@@ -421,17 +567,21 @@ def validate_path(intent: dict) -> bool:
     """
     Validate graph traversal path structure.
 
-    Constraints:
-    - maximum path length
-    - required keys per step
+    Checks:
+    - traversal depth constraints
+    - path structural integrity
+    - relationship field presence
+    - target consistency
 
     Parameters
     ----------
     intent : dict
+        Structured intent.
 
     Returns
     -------
     bool
+        True if traversal path is valid.
     """
 
     schema = get_schema(intent)
@@ -464,49 +614,103 @@ def validate_path(intent: dict) -> bool:
 
 def validate_aggregate(intent: dict) -> bool:
     """
-    Validate aggregate function semantic compatibility.
+    Validate aggregate semantic compatibility.
 
-    Supported functions:
-    - count
-    - sum
-    - avg
+    Supported aggregate behaviors:
+    - COUNT(*)
+    - SUM
+    - AVG
+    - MIN
+    - MAX
+
+    Checks:
+    - regime compatibility
+    - aggregate target validity
+    - numeric aggregation constraints
+    - COUNT semantics
 
     Parameters
     ----------
     intent : dict
+        Structured intent.
 
     Returns
     -------
     bool
+        True if aggregation is valid.
     """
 
     schema = get_schema(intent)
+
+    meta = get_intent_meta(intent)
+
+    regime = meta.get("regime")
+
     agg = schema.get("aggregate")
+
+    # lookup regimes cannot aggregate
+    if regime in LOOKUP_REGIMES.union(RANKING_REGIMES):
+
+        if agg is not None:
+            return False
+
+        return True
+
+    # aggregation regimes require aggregate
+    if regime in COUNT_REGIMES.union(AGGREGATION_REGIMES):
+
+        if agg is None:
+            return False
 
     if agg is None:
         return True
 
     func = agg.get("function")
     attr = agg.get("attribute")
+
     label = schema.get("target", {}).get("label")
 
     if not func or not label:
         return False
 
+    # --------------------------------------------------
     # COUNT
+    # --------------------------------------------------
+
     if func == "count":
+
+        # count only allowed in count regimes
+        if regime not in COUNT_REGIMES:
+            return False
+
+        # COUNT(*)
+        if attr is not None:
+            return False
+
         if label not in ALLOWED_COUNT_LABELS:
             return False
+
         return True
 
-    # SUM / AVG
-    elif func in {"sum", "avg"}:
+    # --------------------------------------------------
+    # STANDARD AGGREGATIONS
+    # --------------------------------------------------
+
+    if func in {"sum", "avg", "min", "max"}:
+
+        # numeric aggregations only allowed in aggregation regimes
+        if regime not in AGGREGATION_REGIMES:
+            return False
+
         if attr is None:
             return False
 
-        expected_type = ATTRIBUTE_VALUE_TYPES.get(label, {}).get(attr)
+        expected_type = ATTRIBUTE_VALUE_TYPES.get(
+            label,
+            {},
+        ).get(attr)
 
-        if expected_type not in [(int, float), int, float]:
+        if not is_numeric_type(expected_type):
             return False
 
         return True
@@ -515,23 +719,82 @@ def validate_aggregate(intent: dict) -> bool:
 
 
 # --------------------------------------------------
+# Regime/path consistency
+# --------------------------------------------------
+
+def validate_regime_path_consistency(intent: dict) -> bool:
+    """
+    Validate consistency between structural regime and traversal path.
+
+    Rules
+    -----
+    - simple regimes cannot traverse graph
+    - relational regimes must contain traversal paths
+
+    Parameters
+    ----------
+    intent : dict
+        Structured intent.
+
+    Returns
+    -------
+    bool
+        True if regime/path consistency is valid.
+    """
+
+    schema = get_schema(intent)
+
+    meta = get_intent_meta(intent)
+
+    regime = meta.get("regime")
+
+    path = schema.get("path", [])
+
+    has_path = len(path) > 0
+
+    # simple regimes cannot traverse graph
+    if regime and regime.startswith("simple"):
+
+        if has_path:
+            return False
+
+    # relational regimes require traversal
+    if regime and regime.startswith("relational"):
+
+        if not has_path:
+            return False
+
+    return True
+
+
+# --------------------------------------------------
 # Main validation entry point
 # --------------------------------------------------
 
 def is_valid_intent(intent: dict) -> bool:
     """
-    Perform full semantic validation of an intent.
+    Run complete semantic validation pipeline for a structured intent.
 
-    Sequentially applies all validation checks.
+    Sequentially validates:
+    - intent metadata
+    - target structure
+    - return attributes
+    - filters
+    - ordering
+    - limits
+    - traversal paths
+    - aggregations
+    - regime consistency
 
     Parameters
     ----------
     intent : dict
+        Structured intent.
 
     Returns
     -------
     bool
-        True if intent is valid.
+        True if intent passes all validation stages.
     """
 
     if not validate_intent_meta(intent):
@@ -556,6 +819,9 @@ def is_valid_intent(intent: dict) -> bool:
         return False
 
     if not validate_aggregate(intent):
+        return False
+
+    if not validate_regime_path_consistency(intent):
         return False
 
     return True
