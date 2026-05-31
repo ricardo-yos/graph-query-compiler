@@ -1,24 +1,53 @@
 """
-Structural Dataset Split for Graph Reasoning
-============================================
+Structural Dataset Split
+========================
 
-Structure-aware train/validation split for datasets in which each
-example represents a structured graph query schema.
+Structure-aware train/validation split for datasets composed of
+natural language questions paired with structured query schemas.
 
-This split strategy guarantees:
-- Full structural coverage in the training set
-- Validation set composed only of recombinations of known structures
-- No leakage of unseen graph primitives into validation
+This module performs a feature-coverage split strategy that ensures
+the training set contains all structural elements observed in the
+dataset before allocating remaining samples to validation.
+
+Structural features considered include:
+
+- entity labels
+- relationships
+- attributes
+- filter operators
+
+Purpose
+-------
+Reduce the risk of evaluation failures caused by missing structural
+elements in training while preserving a separate validation set for
+model assessment.
+
+Split Strategy
+--------------
+Phase 1
+    Build a training set that covers the complete structural feature
+    universe of the dataset.
+
+Phase 2
+    Adjust train/validation sizes according to the desired validation
+    ratio while preserving structural coverage.
 
 Input
 -----
-BASE_DATASETS_DIR / questions_base.jsonl
+AUGMENTED_DATASETS_DIR / questions_paraphrased.jsonl
 
 Output
 ------
-SPLITS_DATASETS_DIR /
-    ├── train_base.jsonl
-    └── val_base.jsonl
+SPLITS_DATASETS_DIR
+
+├── train_base.jsonl
+└── val_base.jsonl
+
+Dependencies
+------------
+- json
+- random
+- pathlib
 """
 
 import json
@@ -26,7 +55,7 @@ import random
 from typing import Dict, List, Set, Tuple
 
 from pathlib import Path
-from config.paths import BASE_DATASETS_DIR, SPLITS_DATASETS_DIR
+from config.paths import AUGMENTED_DATASETS_DIR, SPLITS_DATASETS_DIR
 
 
 # ======================================================
@@ -35,21 +64,27 @@ from config.paths import BASE_DATASETS_DIR, SPLITS_DATASETS_DIR
 
 def extract_features(schema: Dict) -> Dict[str, Set[str]]:
     """
-    Extract structural features from a graph query schema.
+    Extract structural features from a schema.
+
+    Features are used to determine structural coverage and guide
+    train/validation splitting.
+
+    Extracted feature categories include:
+
+    - entity labels
+    - relationship types
+    - attribute references
+    - filter operators
 
     Parameters
     ----------
-    schema : dict
-        Structured graph query schema.
+    schema : Dict
+        Structured query schema.
 
     Returns
     -------
     Dict[str, Set[str]]
-        Dictionary containing sets of:
-        - labels
-        - relations
-        - attributes
-        - operators
+        Mapping of feature categories to extracted values.
     """
     features = {
         "labels": set(),
@@ -89,15 +124,18 @@ def build_feature_universe(dataset: List[Dict]) -> Dict[str, Set[str]]:
     """
     Build the complete structural feature universe of a dataset.
 
+    Aggregates all structural features observed across every schema
+    in the dataset.
+
     Parameters
     ----------
-    dataset : List[dict]
-        Dataset containing question-schema pairs.
+    dataset : List[Dict]
+        Dataset containing schema examples.
 
     Returns
     -------
     Dict[str, Set[str]]
-        Aggregated universe of all structural features.
+        Complete set of observed structural features.
     """
     universe = {
         "labels": set(),
@@ -126,22 +164,27 @@ def structural_split(
     """
     Perform a structure-aware train/validation split.
 
-    The training set is guaranteed to cover the full
-    structural feature universe of the dataset.
+    The algorithm first selects samples required to cover all
+    structural features observed in the dataset.
+
+    Remaining samples are then allocated to the validation set and
+    adjusted to match the requested validation ratio.
 
     Parameters
     ----------
-    dataset : List[dict]
+    dataset : List[Dict]
         Input dataset.
-    val_ratio : float, optional
-        Proportion of samples assigned to validation.
-    seed : int, optional
-        Random seed for reproducibility.
+
+    val_ratio : float, default=0.2
+        Desired validation proportion.
+
+    seed : int, default=42
+        Random seed used for reproducibility.
 
     Returns
     -------
-    Tuple[List[dict], List[dict]]
-        Training and validation splits.
+    Tuple[List[Dict], List[Dict]]
+        Train and validation datasets.
     """
     random.seed(seed)
     random.shuffle(dataset)
@@ -158,7 +201,19 @@ def structural_split(
 
     def introduces_new_structure(features: Dict[str, Set[str]]) -> bool:
         """
-        Check whether a sample introduces unseen structural features.
+        Check whether a sample introduces previously unseen
+        structural features.
+
+        Parameters
+        ----------
+        features : Dict[str, Set[str]]
+            Features extracted from a schema.
+
+        Returns
+        -------
+        bool
+            True if at least one feature category contains values
+            not yet covered by the training set.
         """
         return any(features[k] - covered[k] for k in covered)
 
@@ -199,19 +254,22 @@ def assert_structural_coverage(
     full_universe: Dict[str, Set[str]],
 ) -> None:
     """
-    Assert that the training set covers all structural features.
+    Verify that the training split covers the complete structural
+    feature universe of the dataset.
 
     Parameters
     ----------
-    train_set : List[dict]
-        Training dataset split.
+    train_set : List[Dict]
+        Training dataset.
+
     full_universe : Dict[str, Set[str]]
-        Structural universe derived from the full dataset.
+        Structural feature universe extracted from the full dataset.
 
     Raises
     ------
     ValueError
-        If any structural feature is missing from the training set.
+        Raised when one or more structural features are missing from
+        the training split.
     """
     train_universe = build_feature_universe(train_set)
 
@@ -231,7 +289,17 @@ def assert_structural_coverage(
 
 def load_jsonl(path: str) -> List[Dict]:
     """
-    Load a JSONL file into memory.
+    Load a JSONL dataset into memory.
+
+    Parameters
+    ----------
+    path : str
+        Path to the JSONL file.
+
+    Returns
+    -------
+    List[Dict]
+        Parsed dataset records.
     """
     with open(path, "r", encoding="utf-8") as f:
         return [json.loads(line) for line in f]
@@ -239,7 +307,15 @@ def load_jsonl(path: str) -> List[Dict]:
 
 def save_jsonl(path: str, data: List[Dict]) -> None:
     """
-    Save a list of dictionaries to a JSONL file.
+    Save dataset records to a JSONL file.
+
+    Parameters
+    ----------
+    path : str
+        Output file path.
+
+    data : List[Dict]
+        Dataset records to persist.
     """
     with open(path, "w", encoding="utf-8") as f:
         for row in data:
@@ -253,9 +329,21 @@ def save_jsonl(path: str, data: List[Dict]) -> None:
 
 def main() -> None:
     """
-    Execute the structure-aware dataset split.
+    Execute the complete structural dataset splitting workflow.
+
+    Workflow
+    --------
+    1. Load augmented dataset
+    2. Compute structural split
+    3. Verify structural coverage
+    4. Save train split
+    5. Save validation split
+
+    Returns
+    -------
+    None
     """
-    input_path = Path(BASE_DATASETS_DIR) / "questions_base.jsonl"
+    input_path = Path(AUGMENTED_DATASETS_DIR) / "questions_paraphrased.jsonl"
     output_train = Path(SPLITS_DATASETS_DIR) / "train_base.jsonl"
     output_val = Path(SPLITS_DATASETS_DIR) / "val_base.jsonl"
 
