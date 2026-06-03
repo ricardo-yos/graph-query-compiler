@@ -1,0 +1,452 @@
+# =========================================================
+# Dataset
+# =========================================================
+
+input_file: "questions_base.jsonl"
+
+output_file: "questions_paraphrased.jsonl"
+
+
+# =========================================================
+# Groq
+# =========================================================
+
+model_name: "llama-3.1-8b-instant"
+
+temperature: 0.3
+
+max_tokens: 400
+
+sleep_seconds: 2
+
+
+# =========================================================
+# Paraphrasing
+# =========================================================
+
+n_paraphrases: 2
+
+
+# =========================================================
+# Prompt
+# =========================================================
+
+system_prompt: >
+  You generate natural Brazilian Portuguese paraphrases
+  for graph query datasets.
+
+  Your goal is to rewrite synthetic questions so they sound
+  like real user searches while preserving exact semantics.
+
+  Semantic preservation is the highest priority.
+
+  Never expose schema labels, enum values, internal values,
+  database fields, graph labels, or implementation details.
+
+  Convert category filters into natural language entities.
+
+  Category mappings:
+
+  pet_store:
+  - pet shop
+  - petshop
+  - loja de pets
+
+  veterinary_care:
+  - clínica veterinária
+  - veterinária
+
+  pet_grooming:
+  - banho e tosa
+
+  pet_boarding:
+  - hotel para pets
+
+  pet_training:
+  - adestramento
+
+  IMPORTANT:
+
+  - Never replace one category with another.
+  - Never remove a category constraint.
+  - Never invent a category that does not exist.
+  - The generated question must refer to exactly the same category
+    as the original question.
+
+  When a category filter exists:
+
+  - Make the category the main entity of the sentence.
+  - Replace generic entities such as:
+    - lugar
+    - local
+    - estabelecimento
+    - entidade
+
+    with the corresponding category.
+
+  Examples:
+
+  Original:
+  - lugar com tipo pet_store
+
+  Good:
+  - pet shop
+  - petshop
+  - loja de pets
+
+  Bad:
+  - lugar com tipo pet_store
+  - local do tipo pet_store
+  - estabelecimento do tipo pet_store
+  - pet shop do tipo pet_store
+
+  Original:
+  - lugar com tipo veterinary_care
+
+  Good:
+  - clínica veterinária
+  - veterinária
+
+  Bad:
+  - local do tipo veterinary_care
+  - clínica veterinária do tipo veterinary_care
+
+  Additional rules:
+
+  - Never mention "tipo".
+  - Never mention schema values.
+  - Never mention enum values.
+  - Never mix natural language with schema values.
+  - Remove category filters from the wording after converting
+    them into natural language.
+
+  Good:
+  - Qual é o nome do pet shop com avaliação no máximo 3?
+  - Quais clínicas veterinárias possuem mais de 100 avaliações?
+  - Liste os pet shops chamados Pet Shop Centro.
+
+  Bad:
+  - Qual é o nome do lugar com tipo pet_store?
+  - Qual é o nome do pet shop com tipo pet_store?
+  - Quais locais do tipo clínica veterinária possuem mais de 100 avaliações?
+
+  Return only the requested paraphrases.
+
+  Never provide explanations, notes, comments, reasoning,
+  warnings, corrections, markdown, or additional text.
+
+user_instructions:
+
+  simple_lookup_query: >
+    Rewrite the following lookup question into natural Brazilian Portuguese variations.
+
+    Rules:
+
+    - Preserve the exact semantic meaning.
+    - Preserve all entities, filters, comparisons, and constraints.
+    - Do not add or remove information.
+    - Keep the same query intent and expected answer type.
+
+    - The query MUST remain a lookup query.
+    - The query MUST retrieve entities or attributes.
+    - Do not transform the query into count, aggregation, or ranking.
+
+    - Use natural Brazilian Portuguese.
+    - Prefer wording commonly used by real users.
+    - Keep the wording direct and explicit.
+    - Vary sentence structure naturally.
+
+    - Prefer expressions such as:
+      - Qual é o nome...
+      - Quais são...
+      - Liste...
+      - Mostre...
+      - Exiba...
+      - Retorne...
+
+    - Avoid:
+      - Quantos...
+      - Qual é a média...
+      - Qual é a soma...
+      - Top...
+      - Ordenados por...
+
+    - Preserve comparisons exactly:
+      - >= → "pelo menos"
+      - <= → "no máximo" or "igual ou inferior"
+      - > → "mais de"
+      - < → "menos de"
+
+    Return ONLY a valid JSON array of strings.
+
+  simple_count_query: >
+    Rewrite the following count question into natural Brazilian Portuguese variations.
+
+    Rules:
+
+    - Preserve the exact semantic meaning.
+    - Preserve all entities, filters, comparisons, and constraints.
+    - Do not add or remove information.
+
+    - The query MUST remain a count query.
+    - The query MUST ask for a quantity.
+    - Do not transform the query into lookup, aggregation, or ranking.
+
+    - Prefer expressions such as:
+      - Quantos...
+      - Qual o número de...
+      - Há quantos...
+      - Quantidade de...
+
+    - Avoid:
+      - Liste...
+      - Mostre...
+      - Quais são...
+      - Média...
+      - Soma...
+      - Top...
+
+    - Preserve comparisons exactly:
+      - >= → "pelo menos"
+      - <= → "no máximo" or "igual ou inferior"
+      - > → "mais de"
+      - < → "menos de"
+
+    Return ONLY a valid JSON array of strings.
+
+  simple_aggregation_query: >
+    Rewrite the following aggregation question into natural Brazilian Portuguese variations.
+
+    Rules:
+
+    - Preserve the exact semantic meaning.
+    - Preserve all entities, filters, comparisons, and constraints.
+    - Do not add or remove information.
+
+    - The query MUST remain an aggregation query.
+    - Preserve the aggregation operation exactly.
+    - Do not transform the query into lookup, count, or ranking.
+
+    - Preserve:
+      - média
+      - soma
+      - mínimo
+      - máximo
+
+    - Prefer natural user wording.
+
+    - Preserve comparisons exactly:
+      - >= → "pelo menos"
+      - <= → "no máximo" or "igual ou inferior"
+      - > → "mais de"
+      - < → "menos de"
+
+    Return ONLY a valid JSON array of strings.
+
+  simple_ranking_query: >
+    Rewrite the following ranking question into natural Brazilian Portuguese variations.
+
+    Rules:
+
+    - Preserve the exact semantic meaning.
+    - Preserve all entities, filters, comparisons, and constraints.
+    - Do not add or remove information.
+
+    - The query MUST remain a ranking query.
+    - Preserve ordering and limit constraints.
+    - Do not transform the query into lookup, count, or aggregation.
+
+    - Preserve concepts such as:
+      - top-k
+      - primeiros
+      - últimos
+      - ordenados
+      - classificados
+      - ranking
+
+    - Preserve comparisons exactly:
+      - >= → "pelo menos"
+      - <= → "no máximo" or "igual ou inferior"
+      - > → "mais de"
+      - < → "menos de"
+
+    Return ONLY a valid JSON array of strings.
+
+  relational_lookup_query: >
+    Rewrite the following relational lookup question into natural Brazilian Portuguese variations.
+
+    Rules:
+
+    - Preserve the exact semantic meaning.
+    - Preserve all entities, filters, comparisons, and constraints.
+    - Do not add or remove information.
+    - Keep the same query intent and expected answer type.
+
+    - Preserve the regime exactly.
+    - The query MUST remain a relational lookup query.
+    - The query MUST retrieve entities or attributes.
+    - Preserve relationship traversal exactly.
+    - Never remove the relationship between entities.
+    - Do not transform the query into a simple query.
+    - Do not transform the query into count, aggregation, or ranking.
+
+    - Use natural Brazilian Portuguese.
+    - Prefer wording commonly used by real users.
+    - Keep the wording direct and explicit.
+    - Vary sentence structure naturally.
+
+    - Prefer expressions such as:
+      - Qual é o nome...
+      - Quais são...
+      - Liste...
+      - Mostre...
+      - Exiba...
+      - Retorne...
+
+    - Preserve relationship expressions such as:
+      - localizados em
+      - dentro de
+      - pertencentes a
+      - presentes em
+      - contidos em
+
+    - Avoid:
+      - Quantos...
+      - Qual é a média...
+      - Qual é a soma...
+      - Top...
+      - Ordenados por...
+
+    - Preserve comparisons exactly:
+      - >= → "pelo menos"
+      - <= → "no máximo" or "igual ou inferior"
+      - > → "mais de"
+      - < → "menos de"
+
+    Return ONLY a valid JSON array of strings.
+
+  relational_count_query: >
+    Rewrite the following relational count question into natural Brazilian Portuguese variations.
+
+    Rules:
+
+    - Preserve the exact semantic meaning.
+    - Preserve all entities, filters, comparisons, and constraints.
+    - Do not add or remove information.
+
+    - Preserve the regime exactly.
+    - The query MUST remain a relational count query.
+    - The query MUST ask for a quantity.
+    - Preserve relationship traversal exactly.
+    - Never remove the relationship between entities.
+    - Do not transform the query into a simple query.
+    - Do not transform the query into lookup, aggregation, or ranking.
+
+    - Prefer expressions such as:
+      - Quantos...
+      - Qual o número de...
+      - Há quantos...
+      - Quantidade de...
+
+    - Preserve relationship expressions such as:
+      - localizados em
+      - dentro de
+      - pertencentes a
+      - presentes em
+      - contidos em
+
+    - Avoid:
+      - Liste...
+      - Mostre...
+      - Quais são...
+      - Média...
+      - Soma...
+      - Top...
+
+    - Preserve comparisons exactly:
+      - >= → "pelo menos"
+      - <= → "no máximo" or "igual ou inferior"
+      - > → "mais de"
+      - < → "menos de"
+
+    Return ONLY a valid JSON array of strings.
+
+  relational_aggregation_query: >
+    Rewrite the following relational aggregation question into natural Brazilian Portuguese variations.
+
+    Rules:
+
+    - Preserve the exact semantic meaning.
+    - Preserve all entities, filters, comparisons, and constraints.
+    - Do not add or remove information.
+
+    - Preserve the regime exactly.
+    - The query MUST remain a relational aggregation query.
+    - Preserve relationship traversal exactly.
+    - Never remove the relationship between entities.
+    - Do not transform the query into a simple query.
+    - Preserve the aggregation operation exactly.
+    - Do not transform the query into lookup, count, or ranking.
+
+    - Preserve:
+      - média
+      - soma
+      - mínimo
+      - máximo
+
+    - Preserve relationship expressions such as:
+      - localizados em
+      - dentro de
+      - pertencentes a
+      - presentes em
+      - contidos em
+
+    - Prefer natural user wording.
+
+    - Preserve comparisons exactly:
+      - >= → "pelo menos"
+      - <= → "no máximo" or "igual ou inferior"
+      - > → "mais de"
+      - < → "menos de"
+
+    Return ONLY a valid JSON array of strings.
+
+  relational_ranking_query: >
+    Rewrite the following relational ranking question into natural Brazilian Portuguese variations.
+
+    Rules:
+
+    - Preserve the exact semantic meaning.
+    - Preserve all entities, filters, comparisons, and constraints.
+    - Do not add or remove information.
+
+    - Preserve the regime exactly.
+    - The query MUST remain a relational ranking query.
+    - Preserve relationship traversal exactly.
+    - Never remove the relationship between entities.
+    - Do not transform the query into a simple query.
+    - Preserve ordering and limit constraints.
+    - Do not transform the query into lookup, count, or aggregation.
+
+    - Preserve concepts such as:
+      - top-k
+      - primeiros
+      - últimos
+      - ordenados
+      - classificados
+      - ranking
+
+    - Preserve relationship expressions such as:
+      - localizados em
+      - dentro de
+      - pertencentes a
+      - presentes em
+      - contidos em
+
+    - Preserve comparisons exactly:
+      - >= → "pelo menos"
+      - <= → "no máximo" or "igual ou inferior"
+      - > → "mais de"
+      - < → "menos de"
+
+    Return ONLY a valid JSON array of strings.
