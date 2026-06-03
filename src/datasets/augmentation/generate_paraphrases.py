@@ -116,7 +116,7 @@ SLEEP_SECONDS = cfg["sleep_seconds"]
 # prompting configuration
 SYSTEM_PROMPT = cfg["system_prompt"]
 
-USER_INSTRUCTION = cfg["user_instruction"]
+USER_INSTRUCTIONS = cfg["user_instructions"]
 
 
 # =========================================================
@@ -131,7 +131,10 @@ client = Groq()
 # Prompt Builder
 # =========================================================
 
-def build_prompt(question: str) -> str:
+def build_prompt(
+    question: str,
+    regime: str,
+) -> str:
     """
     Build deterministic paraphrasing prompt.
 
@@ -150,21 +153,76 @@ def build_prompt(question: str) -> str:
         Formatted LLM prompt.
     """
 
-    return f"""
-{USER_INSTRUCTION}
+    instruction = USER_INSTRUCTIONS[regime]
 
-Generate {N_PARAPHRASES} paraphrases.
-
-Question:
-"{question}"
-"""
+    return (
+        f"Query regime: {regime}\n\n"
+        f"{instruction}\n\n"
+        f"Generate {N_PARAPHRASES} paraphrases.\n\n"
+        f'Question:\n"{question}"'
+    )
 
 
 # =========================================================
 # LLM Call
 # =========================================================
 
-def generate_paraphrases(question: str) -> List[str]:
+def extract_json_array(content: str) -> List[str]:
+    """
+    Extract JSON array from model response.
+    """
+
+    content = content.strip()
+
+    # Try direct parsing first
+    try:
+
+        parsed = json.loads(content)
+
+        if isinstance(parsed, list):
+            return parsed
+
+    except json.JSONDecodeError:
+        pass
+
+    # Fallback extraction
+    start = content.find("[")
+    end = content.rfind("]")
+
+    if start == -1 or end == -1:
+
+        raise ValueError(
+            f"Model did not return a JSON array.\n\n"
+            f"Raw response:\n{content}"
+        )
+
+    json_text = content[start:end + 1]
+
+    try:
+
+        parsed = json.loads(json_text)
+
+        if not isinstance(parsed, list):
+
+            raise ValueError(
+                "Extracted JSON is not a list."
+            )
+
+        return parsed
+
+    except json.JSONDecodeError as e:
+
+        raise ValueError(
+            f"Invalid JSON returned.\n\n"
+            f"JSON fragment:\n{json_text}\n\n"
+            f"Raw response:\n{content}\n\n"
+            f"Original error: {e}"
+        ) from e
+
+def generate_paraphrases(
+    question: str,
+    regime: str,
+) -> List[str]:
     """
     Generate paraphrases using the Groq API.
 
@@ -199,31 +257,19 @@ def generate_paraphrases(question: str) -> List[str]:
             },
             {
                 "role": "user",
-                "content": build_prompt(question),
+                "content": build_prompt(
+                    question=question,
+                    regime=regime,
+                ),
             },
         ],
     )
 
     content = response.choices[0].message.content.strip()
 
-    # -----------------------------------------------------
-    # Robust JSON extraction
-    # -----------------------------------------------------
-    # Some LLM responses may include explanations or
-    # formatting outside the JSON array.
-    # Extract only the array portion safely.
-    start = content.find("[")
+    return extract_json_array(content)
 
-    end = content.rfind("]")
-
-    if start == -1 or end == -1:
-        raise ValueError(
-            "Model did not return valid JSON array."
-        )
-
-    json_text = content[start:end + 1]
-
-    return json.loads(json_text)
+    content = response.choices[0].message.content.strip()
 
 
 # =========================================================
@@ -279,20 +325,25 @@ def process_dataset() -> None:
             sample = json.loads(line)
 
             question = sample["question"]
+            regime = sample["regime"]
 
             try:
 
                 # generate semantic paraphrases
                 paraphrases = generate_paraphrases(
-                    question
+                    question=question,
+                    regime=regime,
                 )
 
             except Exception as e:
 
-                # skip malformed or failed generations
-                print("\nError generating paraphrases")
-                print(question)
+                print("\n====================================")
+                print("Error generating paraphrases")
+                print("====================================")
+                print(f"Question: {question}")
+                print()
                 print(e)
+                print()
 
                 continue
 
