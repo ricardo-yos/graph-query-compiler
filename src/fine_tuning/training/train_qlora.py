@@ -9,10 +9,11 @@ structured JSON representation of user intent and graph constraints.
 The training objective is to teach the model to:
 
 1. read a natural language question
-2. infer the user intent
+2. infer the query regime
 3. generate a strictly valid JSON output containing:
-   - user_intent
+   - regime
    - schema
+4. terminate generation using a configurable stop token
 
 Key Design Principles
 ---------------------
@@ -35,7 +36,7 @@ Each JSONL entry must contain:
 
 {
     "question": "...",
-    "user_intent": "...",
+    "regime": "...",
     "schema": {...}
 }
 
@@ -44,15 +45,21 @@ Model Output Format
 The model is trained to generate:
 
 {
-    "user_intent": "...",
+    "regime": "...",
     "schema": {...}
 }
 <STOP_TOKEN>
 
 Scope
 -----
-This module only handles supervised fine-tuning.
-All dataset preparation steps occur upstream.
+This module handles:
+- supervised fine-tuning
+- tokenizer preparation
+- QLoRA configuration
+- dataset tokenization
+- training orchestration
+
+Dataset preparation and validation occur upstream.
 """
 
 import json
@@ -85,7 +92,11 @@ from config.paths import FINE_TUNING_CONFIG_DIR
 
 def load_config(path: Path) -> Dict:
     """
-    Load and normalize the YAML configuration file.
+    Load and normalize the QLoRA training configuration.
+
+    The configuration is loaded from a YAML file and selected
+    parameters are explicitly converted to their expected types
+    to ensure consistent behavior across environments.
 
     Parameters
     ----------
@@ -95,7 +106,7 @@ def load_config(path: Path) -> Dict:
     Returns
     -------
     Dict
-        Parsed and type-normalized configuration dictionary.
+        Parsed and normalized configuration dictionary.
     """
     with open(path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
@@ -135,25 +146,28 @@ def load_config(path: Path) -> Dict:
 
 def build_prompt(question: str, instruction: str) -> str:
     """
-    Build the instruction-style prompt provided to the model.
+    Build the instruction-tuning prompt used during training.
 
-    The prompt follows an instruction-tuning format and separates:
-    - task instruction
+    The prompt contains:
+    - task-level instruction
     - user question
-    - model answer region
+    - answer section marker
+
+    The model is trained to generate only the structured JSON
+    representation after the answer marker.
 
     Parameters
     ----------
     question : str
-        Natural language user question.
+        Natural language question.
 
     instruction : str
-        Task-level instruction describing the expected output structure.
+        Task instruction describing the expected JSON output.
 
     Returns
     -------
     str
-        Formatted prompt string ready for tokenization.
+        Formatted training prompt.
     """
     return (
         "### Instruction:\n"
@@ -166,27 +180,30 @@ def build_prompt(question: str, instruction: str) -> str:
 
 def build_output(example: Dict, stop_token: str) -> str:
     """
-    Construct the expected model output string.
+    Build the target JSON output for supervised fine-tuning.
 
-    The output is serialized as deterministic JSON followed by a stop token.
-    The stop token helps prevent the model from generating trailing text
-    after the structured response.
+    The output contains only:
+    - regime
+    - schema
+
+    A stop token is appended to enforce deterministic generation
+    boundaries during inference.
 
     Parameters
     ----------
     example : Dict
-        Dataset row containing user_intent and schema.
+        Dataset sample containing regime and schema.
 
     stop_token : str
-        Special token indicating the end of the structured output.
+        End-of-generation token.
 
     Returns
     -------
     str
-        JSON string terminated by the stop token.
+        Serialized JSON output terminated by the stop token.
     """
     output = {
-        "user_intent": example["user_intent"],
+        "regime": example["regime"],
         "schema": example["schema"],
     }
 
@@ -208,7 +225,30 @@ def build_output(example: Dict, stop_token: str) -> str:
 
 def main() -> None:
     """
-    Execute the QLoRA fine-tuning pipeline.
+    Execute the complete QLoRA fine-tuning workflow.
+
+    Workflow
+    --------
+    1. Load training configuration
+    2. Initialize tokenizer
+    3. Configure 4-bit quantization
+    4. Load base language model
+    5. Attach LoRA adapters
+    6. Load train/validation datasets
+    7. Tokenize and mask training examples
+    8. Configure Hugging Face Trainer
+    9. Run supervised fine-tuning
+    10. Save trained adapters and tokenizer
+
+    Training uses:
+    - QLoRA quantization
+    - masked prompt loss
+    - supervised JSON generation
+    - train/validation evaluation
+
+    Returns
+    -------
+    None
     """
     cfg = load_config(
         Path(FINE_TUNING_CONFIG_DIR) / "training" / "qlora_config.yaml"
@@ -229,7 +269,8 @@ def main() -> None:
     )
 
     tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.add_tokens([stop_token], special_tokens=False)
+    if stop_token not in tokenizer.get_vocab():
+        tokenizer.add_tokens([stop_token], special_tokens=False)
 
     # -------------------------------------------------
     # Quantization (QLoRA)
@@ -288,23 +329,29 @@ def main() -> None:
 
     def tokenize_fn(example: Dict) -> Dict:
         """
-        Tokenize a dataset example and apply label masking.
+        Tokenize a training example and create masked labels.
 
-        The prompt portion is masked using -100 so that loss is computed
-        only on the target JSON output.
+        The prompt portion is excluded from loss computation by
+        replacing prompt tokens with -100 in the label sequence.
 
-        This ensures the model learns to generate structured responses
-        rather than memorize the instruction text.
+        Loss is therefore computed only on the structured JSON
+        output generated by the model.
 
         Parameters
         ----------
         example : Dict
-            Raw dataset example.
+            Dataset sample containing:
+            - question
+            - regime
+            - schema
 
         Returns
         -------
         Dict
-            Tokenized inputs including masked labels.
+            Tokenized example containing:
+            - input_ids
+            - attention_mask
+            - labels
         """
         prompt = build_prompt(example["question"], instruction)
         output = build_output(example, stop_token)
@@ -379,7 +426,6 @@ def main() -> None:
         args=training_args,
         train_dataset=tokenized_dataset["train"],
         eval_dataset=tokenized_dataset["validation"],
-        tokenizer=tokenizer,
     )
 
     trainer.train()
