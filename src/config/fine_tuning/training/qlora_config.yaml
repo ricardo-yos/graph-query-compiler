@@ -4,7 +4,7 @@
 base_model: mistralai/Mistral-7B-Instruct-v0.2
 tokenizer_type: mistralai/Mistral-7B-Instruct-v0.2
 
-sequence_len: 1024
+sequence_len: 512
 stop_token: "</json>"
 
 # ==============================================
@@ -25,9 +25,9 @@ dataset:
 # Prompt Instruction
 # ==============================================
 task_instruction: >
-  Given a natural language question, predict the user's intent and return a JSON query schema.
+  Given a natural language question, predict the user's query regime and return a JSON query schema.
   The JSON structure MUST be exactly as specified.
-  Include both "user_intent" and "schema" in the output.
+  Include both "regime" and "schema" in the output.
   Return ONLY valid JSON. Do not explain.
 
 # ==============================================
@@ -41,21 +41,24 @@ bnb_4bit_compute_dtype: float16
 # ==============================================
 # LoRA Configuration
 # ==============================================
-lora_r: 32
-lora_alpha: 64
+lora_r: 64
+lora_alpha: 128
 lora_dropout: 0.05
 lora_bias: none
 
 target_modules:
   - q_proj
-  - v_proj
   - k_proj
+  - v_proj
   - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
 
 # ==============================================
 # Training Configuration
 # ==============================================
-num_epochs: 8
+num_epochs: 4
 
 learning_rate: 3e-5
 
