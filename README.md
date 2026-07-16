@@ -301,7 +301,7 @@ src/
 
 For a detailed explanation of the methodology and theoretical motivation:
 
-- Technical Article (`docs/article_graph_query_compiler.md`)
+- [Technical Article](docs/article_graph_query_compiler.md)
 
 ---
 
@@ -326,6 +326,7 @@ Graph Query Compiler is an active research project focused on reliable natural l
 Future work includes:
 
 - Add relational graph queries to the benchmark
+- Expand graph schema complexity and domain coverage
 - Evaluate multi-hop graph query capabilities
 - Expand benchmark coverage across query regimes
 - Improve structural dataset generation
