@@ -1,22 +1,12 @@
 # Graph Query Compiler
 
-**From natural language to reliable graph queries — with structured reasoning.**
+**From natural language to reliable graph queries — with structured query compilation.**
 
-Graph Query Compiler (GQC) bridges natural language and graph query languages through structured reasoning.
+Graph Query Compiler (GQC) bridges natural language and graph query languages through structured intermediate representations.
 
-It compiles natural language questions into explicit, executable graph query schemas, enabling reliable and interpretable reasoning over structured data.
+Instead of directly generating graph queries as text, GQC compiles natural language into an explicit intermediate representation (IR) that captures the semantic structure of the query before deterministic compilation.
 
-GQC reframes query generation as a **structured prediction problem over graph schemas**.
-
-Instead of directly generating answers, the model produces an intermediate semantic representation describing:
-
-- entities
-- relationships
-- constraints
-- aggregations
-- multi-hop paths
-
-This representation can be deterministically translated into graph query languages such as Cypher, SQL, Gremlin, or SPARQL.
+This approach makes graph query generation more reliable, interpretable, and suitable for production environments.
 
 ---
 
@@ -28,13 +18,21 @@ This representation can be deterministically translated into graph query languag
 Which veterinary clinics have rating above 4?
 ```
 
-**Intermediate representation (simplified):**
+**Intermediate representation:**
 
 ```json
 {
   "filters": [
-    {"attribute": "rating", "operator": ">", "value": 4},
-    {"attribute": "type", "operator": "=", "value": "veterinary_care"}
+    {
+      "attribute": "rating",
+      "operator": ">",
+      "value": 4
+    },
+    {
+      "attribute": "type",
+      "operator": "=",
+      "value": "veterinary_care"
+    }
   ],
   "target": "Place",
   "return": ["name"]
@@ -62,85 +60,86 @@ RETURN p.name AS name
 
 ---
 
-## Why this matters
+## Why Graph Query Compiler?
 
-Most LLM-based systems generate queries as plain text, which leads to:
+Most LLM-based systems generate graph queries directly as text, making them difficult to validate and often unreliable in production.
 
-- brittle outputs
-- lack of validation
-- unpredictable behavior in production
+Graph Query Compiler introduces an explicit semantic layer between natural language and executable queries.
 
-Graph Query Compiler introduces a structured intermediate layer, turning query generation into a deterministic and verifiable process.
+This intermediate representation makes it possible to:
 
-This makes it suitable for real-world systems where reliability matters, especially in production environments involving structured data.
-
----
-
-## Use Cases
-
-- Natural language interfaces for graph databases
-- Business intelligence over structured data
-- Semantic search over knowledge graphs
-- Query generation for Neo4j / SQL systems
-- Assistive analytics tools
+- validate semantic correctness
+- enforce schema consistency
+- prevent malformed queries
+- generate deterministic graph queries
+- inspect the intermediate representation
 
 ---
 
-## Key Features
+## Design Principles
 
-- Structured intermediate representation (IR)
-- Deterministic query generation
-- Schema-aware validation
-- Support for multi-hop graph queries
-- Modular pipeline (generation → validation → compilation)
+Graph Query Compiler is built around four core principles:
 
----
-
-## Motivation  
-
-Large Language Models (LLMs) are powerful but often struggle with structured reasoning tasks:
-
-- hallucinated facts
-- lack of interpretability
-- weak control over constraints
-- difficulty performing multi-hop reasoning
-
-Graph Query Compiler addresses these limitations by introducing an explicit intermediate reasoning layer.
-
-This intermediate representation makes it possible to validate, constrain, and execute reasoning steps before they are expressed in natural language.
-
-As a result, the system:
-
-- improves reliability
-- enables deterministic execution
-- makes reasoning inspectable
-- encourages compositional generalization
+- Explicit intermediate reasoning
+- Deterministic query compilation
+- Schema-aware generation
+- Modular architecture
 
 ---
 
-## Core Idea
+## Intermediate Representation
 
-Graph Query Compiler treats query generation as a program synthesis problem:
+Rather than predicting query text directly, the model predicts a structured semantic schema describing:
 
-Natural language questions are compiled into structured schemas that describe the semantic structure of the query.
+- target entities
+- graph traversals
+- filters
+- aggregations
+- ranking
+- return projections
+- multi-hop paths
+
+This representation separates semantic query understanding from query generation, enabling deterministic compilation into graph query languages.
+
+---
+
+## Supported Query Operations
+
+Current intermediate schemas support:
+
+- Entity lookup
+- Filtering
+- Counting
+- Aggregation
+- Ranking
+- Multi-hop graph traversal
+- Attribute projection
+
+---
+
+## Dataset Generation
+
+Instead of relying exclusively on manually annotated datasets, GQC generates structurally valid training examples through a controlled pipeline.
 
 ```text
-Natural Language Question
-        ↓
-Structured Intent Schema
-        ↓
-Graph Query (Cypher / SQL / etc.)
-        ↓
-Execution on Knowledge Graph
-        ↓
-Grounded Answer
+Graph Schema
+      ↓
+Structural Intent Generation
+      ↓
+Semantic Validation
+      ↓
+Natural Language Question Generation
+      ↓
+Training Dataset
 ```
+
+This ensures that generated samples remain structurally consistent with the graph schema while covering a large space of valid query patterns.
 
 ---
 
 ## Architecture
 
-Graph Query Compiler is organized as a modular pipeline:
+Graph Query Compiler follows a modular compilation pipeline.
 
 ```text
 Graph Schema Definition
@@ -151,88 +150,183 @@ Semantic Validation
         ↓
 Natural Language Question Generation
         ↓
-Training Dataset (question → intent schema)
+Training Dataset Construction
         ↓
 QLoRA Fine-tuning
         ↓
+LoRA Merge & Model Optimization
+        ↓
 Inference
         ↓
-Schema Compilation
+Structured Intent Schema
         ↓
-Graph Query Execution
+Schema Validation
+        ↓
+Deterministic Query Compilation
+        ↓
+Cypher Query
+        ↓
+Graph Database Execution
+        ↓
+Grounded Answer
 ```
 
-Each stage is independently controlled, enabling extensibility and debugging.
+The overall workflow can be summarized as:
+
+```text
+Dataset → Fine-tuning → Model Optimization → Inference → Evaluation
+```
+
+Each stage is independently controlled, making the system easier to debug, extend, and evaluate.
+
+---
+
+## Evaluation
+
+The benchmark focuses on the most challenging component of the system: structured intent schema generation.
+
+Instead of evaluating only final query execution, Graph Query Compiler measures the quality of the intermediate representation generated by the model.
+
+Current evaluation metrics include:
+
+- Regime classification accuracy
+- Exact schema match
+- Field-level accuracy
+- Component-level accuracy
+
+The benchmark currently focuses on simple graph queries, with relational graph query evaluation planned as future work.
+
+---
+
+## Use Cases
+
+- Natural language interfaces for graph databases
+- Business intelligence over structured data
+- Knowledge graph search
+- Query generation for Neo4j
+- Structured retrieval systems
+- AI assistants over graph data
 
 ---
 
 ## Quickstart
 
-### 1. Clone the repository
+### Clone repository
 
 ```bash
 git clone https://github.com/ricardo-yos/graph-query-compiler
 cd graph-query-compiler
 ```
 
-### 2. Install dependencies
+### Install
 
-Production install:
-```bash
-pip install .
-```
-
-Development / full environment (recommended):
 ```bash
 pip install -e ".[all]"
 ```
 
-### 3. Data preparation pipeline (Intents → Dataset → Split)
+### Build training dataset
 
 ```bash
 python -m src.intents.dataset.build_structural_dataset
+
 python -m src.datasets.generation.distilabel_pipeline
+
 python -m src.datasets.splitting.structural_split
 ```
 
-### 4. Train model (QLoRA fine-tuning)
+### Train model (QLoRA fine-tuning)
 
 ```bash
-python -m src.fine_tuning.training.train_qlora
+python -m src.fine_tuning.train_qlora
 ```
 
-### 5. Run inference (query compiler)
+### Merge LoRA adapter (optional)
+
+Merge the fine-tuned adapter with the base model:
+
+```bash
+python -m src.fine_tuning.merge_qlora
+```
+
+### Convert model to GGUF (optional)
+
+Convert the merged model to GGUF format for optimized local inference:
+
+```bash
+python -m src.fine_tuning.convert_to_gguf
+```
+
+### Quantize model (optional)
+
+Apply quantization to reduce memory usage and improve inference performance:
+
+```bash
+python -m src.fine_tuning.quantize_model
+```
+
+### Run inference
 
 ```bash
 python -m src.compiler.query_compiler
 ```
 
+### Run benchmark evaluation
+
+Evaluate structured schema generation performance:
+
+```bash
+python -m src.benchmark.benchmark_runner
+```
+
+> GGUF conversion and quantization are optional steps intended for optimized local inference.
+
 ---
 
 ## Project Structure
 
-High-level overview of the system architecture:
-
 ```text
 src/
-├── compiler/        # Core query compilation pipeline (IR → Cypher)
-├── intents/         # Intent generation and semantic validation
-├── datasets/        # Dataset generation and preprocessing
-├── fine_tuning/     # Model training and inference (QLoRA)
-├── config/          # Configuration, schema, and environment
+├── compiler/          # End-to-end query compilation pipeline (schema → Cypher)
+├── inference/         # Model inference and structured intent schema generation
+├── intents/           # Structural intent generation and semantic validation
+├── datasets/          # Training dataset generation, preprocessing, and splitting
+├── fine_tuning/       # QLoRA training, model merging, and model optimization
+├── benchmark/         # Benchmark execution and evaluation metrics
+├── config/            # Graph schema definitions, rules, and configuration
 ```
 
 ---
 
 ## Documentation
 
-For a deeper explanation of the design and theoretical motivation:
+For a detailed explanation of the methodology and theoretical motivation:
 
-- [Technical Article](docs/article_graph_query_compiler.md)
+- Technical Article (`docs/article_graph_query_compiler.md`)
 
 ---
 
 ## Status
 
-Research prototype with a fully working end-to-end pipeline:
-natural language → structured schema → executable Cypher query.
+Current implementation includes:
+
+- End-to-end natural language → schema → Cypher pipeline
+- Automatic structural dataset generation
+- Semantic validation
+- QLoRA fine-tuned schema generation model
+- Deterministic Cypher generation
+- Structured schema generation benchmark on simple graph queries
+- Experimental inference support for relational graph queries
+
+Graph Query Compiler is an active research project focused on reliable natural language interfaces for graph databases.
+
+---
+
+## Roadmap
+
+Future work includes:
+
+- Add relational graph queries to the benchmark
+- Evaluate multi-hop graph query capabilities
+- Expand benchmark coverage across query regimes
+- Improve structural dataset generation
+- Extend validation strategies for complex queries
