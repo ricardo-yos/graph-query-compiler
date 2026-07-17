@@ -2,52 +2,69 @@
 
 ## Abstract
 
-Generating accurate structured queries from natural language remains a challenging problem, particularly in graph-based systems where queries must satisfy both structural and semantic constraints. Existing approaches often rely on large language models or weakly supervised data, which can lead to inconsistencies, invalid query structures, and limited controllability.
+Generating reliable graph queries from natural language requires preserving both linguistic meaning and strict structural constraints. Large language models can produce fluent outputs, but they may generate structurally invalid or semantically inconsistent queries when operating without explicit control mechanisms.
 
-This document describes the Graph Query Compiler (GQC), an experimental modular framework for controlled generation of structured graph queries. The system decomposes the problem into distinct stages, including schema-driven intent generation, dataset construction, model adaptation, and query compilation. Central to the framework is a combinatorial generation process guided by structural regimes and field-level policies, enabling systematic exploration of valid query structures while controlling combinatorial growth. A semantic validation layer is used to enforce structural and semantic consistency throughout the pipeline.
+This document presents the Graph Query Compiler (GQC) v1, an experimental framework for controlled natural language to graph query translation. The system separates structural query reasoning from linguistic realization by combining schema-driven intent generation, controlled dataset construction, model adaptation, semantic validation, and deterministic query compilation.
 
-This work focuses on the design and analysis of a controlled framework for structured query generation, rather than on comprehensive empirical benchmarking or finalized evaluation. Preliminary observations from early experiments suggest that the approach can produce structurally consistent query representations and well-formed intermediate abstractions, while also exposing limitations in linguistic generalization and robustness to paraphrased inputs.
+A central aspect of GQC v1 is a structure-first pipeline, where the space of valid query structures is explicitly modeled before language generation. Structural regimes and field-level policies guide the generation process, while validation mechanisms enforce consistency between entities, attributes, operators, relationships, and query semantics.
+
+The current version investigates the feasibility of schema-aware natural language interfaces for graph databases. Experimental analysis indicates that the approach supports more consistent structured representations, while also revealing remaining challenges related to linguistic generalization, relational reasoning, and semantic ambiguity.
 
 ## 1. Introduction
 
-Large language models (LLMs) have demonstrated strong capabilities in generating fluent and contextually coherent text. However, their ability to perform structured reasoning over constrained domains remains limited. Tasks that require consistency with an underlying schema—such as graph query generation—often expose these limitations, as models may produce outputs that are syntactically plausible but semantically invalid. Even when LLMs appear to perform reasoning, this process remains largely implicit and does not reliably enforce domain-specific constraints.
+### 1.1 Motivation
 
-These limitations become more critical in scenarios where multiple attributes, relationships, and filtering conditions must be composed while preserving structural validity. In such cases, LLMs frequently generate outputs that violate schema constraints, introduce incompatible attribute combinations, or misalign the intended query structure with its natural language representation.
+Natural language interfaces have the potential to simplify access to structured data systems by allowing users to interact with databases using everyday language instead of specialized query languages.
 
-Approaches that rely solely on language modeling cannot reliably enforce structural constraints. As a result, they often produce inconsistent or semantically invalid outputs, limiting their effectiveness in tasks such as semantic parsing, dataset construction, and natural language interfaces over structured data systems.
+However, when applied to graph databases, this task becomes significantly more challenging. Graph queries require preserving not only the meaning expressed in natural language, but also the structural constraints defined by the underlying schema, including entities, relationships, attributes, operators, and query composition rules.
 
-To address this gap, we propose the Graph Query Compiler (GQC), an experimental partially deterministic pipeline that separates structural reasoning from linguistic realization. The system generates candidate query intents through controlled combinatorial processes and enforces schema consistency via a semantic validation layer, before mapping these validated structures into natural language. By enforcing structural correctness prior to language generation, GQC aims to reduce common failure modes of LLM-based approaches and support the construction of more consistent structured datasets.
+Recent advances in large language models (LLMs) have demonstrated strong capabilities in natural language understanding and generation. Nevertheless, directly generating executable queries with LLMs remains unreliable, as models may produce outputs that are syntactically valid but structurally inconsistent, semantically incorrect, or incompatible with the database schema.
 
-This approach is intended to provide a more reliable foundation for tasks that depend on structured reasoning, while still preserving the expressive flexibility of natural language.
+This motivates the exploration of approaches that combine the flexibility of language models with explicit structural control mechanisms.
 
-This document focuses on the design, formalization, and analysis of a controlled framework for structured query generation, rather than on comprehensive empirical evaluation or benchmark results. The goal is to explore mechanisms for improving structural validity, semantic consistency, and controllability in query construction, based on early experimental observations.
+### 1.2 Problem Definition
 
-Prior work in semantic parsing and text-to-query generation has explored mapping natural language to structured representations, often relying on neural models or weak supervision. In contrast, this work emphasizes explicit structural control through schema-driven combinatorial generation and rule-based validation, with the objective of enforcing correctness prior to language generation in an experimental setting.
+The main problem addressed by the Graph Query Compiler (GQC) is the reliable translation of natural language questions into structured graph query representations.
 
-## 2. Contributions
+A direct natural language-to-query approach must solve multiple challenges simultaneously:
 
-The main contributions of this work are as follows:
+- identifying the intended entities and relationships;
+- mapping linguistic expressions to schema attributes;
+- preserving operator semantics;
+- composing filters, aggregations, rankings, and traversals correctly;
+- generating outputs compatible with execution constraints.
 
-1. **A Schema-driven Framework for Structured Query Generation**  
-We describe the Graph Query Compiler (GQC), a modular framework that models natural language to graph query translation as a schema-aware structured generation problem, explicitly separating structural reasoning from linguistic realization.
+These challenges become increasingly difficult as query complexity grows. Small semantic differences in natural language can result in fundamentally different query structures. For example, expressions involving comparisons, superlatives, or aggregation may require different structural representations even when they appear linguistically similar.
 
-2. **Controlled Combinatorial Intent Generation**  
-We introduce a deterministic, schema-driven approach to intent generation based on structural regimes and field-level policies, enabling systematic exploration of valid query structures while controlling combinatorial growth.
+Therefore, the problem is not only generating a query that appears plausible, but generating a schema-consistent representation whose semantics can be validated before execution.
 
-3. **Multi-level Constraint Mechanism**  
-We design a layered constraint system that combines high-level structural regimes with fine-grained field-level policies, providing explicit control over query composition and supporting structural and semantic consistency during generation.
+### 1.3 Objectives
 
-4. **Semantic Validation as a First-class Component**  
-We define a rule-based semantic validation layer that operates independently of generation, enforcing domain constraints and filtering invalid or inconsistent query representations before downstream processing.
+The objective of the Graph Query Compiler (GQC) is to develop and evaluate a controlled framework for natural language to graph query translation based on an intermediate structured representation.
 
-5. **A Modular Pipeline for Structured Query Construction**  
-We present a modular architecture that decomposes the process into intent generation, dataset construction, model adaptation, and query compilation, enabling separation of concerns and interpretability across stages of the pipeline.
+The main objectives of GQC v1 are:
 
-6. **Analysis of Challenges in Intent Dataset Construction**  
-We outline key challenges observed during dataset construction for structured query learning, including combinatorial explosion, semantic ambiguity, distribution imbalance, and alignment between natural language and structured representations.
+1. **Define a schema-aware intermediate representation**
+   
+   Create a structured query format capable of representing targets, relationships, filters, aggregations, ordering, limits, and returned attributes.
 
-7. **Preliminary Analysis of Structural vs. Linguistic Generalization**  
-Early experimental observations suggest that while structural generalization can be achieved through controlled generation, linguistic generalization remains challenging, particularly under paraphrased or distribution-shifted inputs. This motivates future exploration of data augmentation and paraphrasing strategies.
+2. **Enable controlled dataset generation**
+   
+   Develop a schema-driven generation pipeline capable of producing diverse training examples while maintaining structural and semantic consistency.
+
+3. **Introduce explicit validation mechanisms**
+   
+   Apply semantic and structural validation before model training and query compilation to reduce invalid representations.
+
+4. **Evaluate model-based intent prediction**
+   
+   Analyze the ability of adapted language models to map natural language questions into structured graph query intents.
+
+5. **Separate language understanding from query execution**
+   
+   Use deterministic compilation from validated structured intents into executable graph queries, improving reliability and interpretability.
+
+GQC v1 focuses on establishing the foundations of a controlled pipeline for schema-aware graph query generation, while identifying the main challenges involved in achieving robust linguistic generalization.
 
 ## 3. System Overview
 
