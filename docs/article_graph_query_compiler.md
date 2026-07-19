@@ -66,67 +66,194 @@ The main objectives of GQC v1 are:
 
 GQC v1 focuses on establishing the foundations of a controlled pipeline for schema-aware graph query generation, while identifying the main challenges involved in achieving robust linguistic generalization.
 
-## 3. System Overview
+## 2. System Overview
 
-The Graph Query Compiler (GQC) is an experimental partially deterministic pipeline designed to generate and validate structured query representations before compiling them into executable graph queries. By explicitly separating structural reasoning from linguistic realization, the system aims to ensure that outputs remain consistent with a predefined schema and suitable for execution in graph database environments.
+The Graph Query Compiler (GQC) v1 is a modular framework designed to translate natural language questions into structured graph query intents.
+
+Instead of directly generating executable graph queries, GQC introduces an intermediate representation layer that separates natural language interpretation from query construction. The system first converts a natural language question into a schema-aware structured intent, which is then validated and compiled into an executable graph query.
+
+This architecture follows a structure-first approach, where query semantics are explicitly represented before execution.
+
+### 2.1 Complete Pipeline
+
+The complete GQC v1 pipeline consists of five main stages:
 
 ```text
 Natural Language Question
-        ↓
-Graph Query Compiler (GQC)
-  ├── Schema-driven Intent Generation
-  ├── Semantic Validation Layer
-  ├── Dataset Construction (synthetic supervision)
-  ├── Model Adaptation (QLoRA fine-tuning)
-        ↓
-Structured Query Intent
-        ↓
-Query Compilation (Cypher generation)
-        ↓
-Graph Database Execution
-        ↓
-Final Answer / Results
+          |
+          v
+1. Schema-Constrained Intent Prediction
+          |
+          v
+2. Structured Query Intent (JSON)
+          |
+          v
+3. Semantic Validation
+          |
+          v
+4. Query Compilation
+          |
+          v
+5. Graph Query Execution
 ```
 
-The Graph Query Compiler (GQC) is a modular framework that translates natural language questions into executable graph queries through a structured intermediate representation. Instead of relying on direct text-to-query generation, the system first constructs schema-consistent query intents using controlled combinatorial generation and semantic validation. These intents are then used to build a training dataset for model adaptation via fine-tuning. At inference time, the model predicts structured intents from natural language inputs, which are validated and compiled into executable graph queries.
+Each stage has a clearly defined responsibility:
 
-This modular architecture allows each stage of the pipeline to operate independently while contributing to a unified objective: improving structural correctness, controllability, and reliability in natural language to graph query translation.
+#### 1. Schema-Constrained Intent Prediction
 
-### Stage 1 — Dataset Generation
-In the first stage, the system generates structured query intents through controlled combinatorial processes within a predefined schema-constrained domain. These intents are then used to construct a dataset that aligns structured representations with corresponding natural language expressions.
+The language model receives a natural language question and predicts a schema-constrained structured query intent. The model is responsible for understanding the linguistic meaning and mapping expressions to schema concepts.
 
-**Subcomponents**
+#### 2. Structured Query Representation
 
-* **Intent Generation**: Structured query intents are generated based on a predefined schema. These intents represent composable query specifications, including entities, attributes, relationships, and filtering conditions. The generation process explores the space of valid query structures while applying constraints to control combinatorial complexity.
+The predicted output is represented as a structured JSON schema containing the main components required to describe the query:
 
-* **Dataset Construction**: Generated intents are transformed into training examples by pairing structured representations with their natural language counterparts. This establishes alignment between structure and language, enabling the construction of supervised datasets for model training.
+- target entity;
+- relationship paths;
+- filters;
+- aggregation operations;
+- ordering;
+- limits;
+- returned attributes.
 
-### Stage 2 — Model Adaptation and Inference
-In the second stage, the generated dataset is used to adapt language models via fine-tuning. The model learns to map natural language inputs to structured query representations, enabling inference of schema-consistent query intents from user inputs.
+This intermediate representation acts as a bridge between natural language and executable graph queries.
 
-**Subcomponents**
+#### 3. Semantic Validation
 
-* **Fine-tuning**: The model is trained on the constructed dataset to learn the mapping between natural language and structured query intents.
+Before compilation, the generated JSON is validated against structural and semantic constraints.
 
-* **Schema Inference**: At inference time, the model predicts structured representations from natural language questions, producing an intermediate representation of the intended query structure.
+The validation layer checks:
 
-### Stage 3 — Query Compilation
-In the final stage, the inferred structured representation is transformed into an executable graph query, such as Cypher. This step converts validated structured intents into operational query syntax.
+- schema compatibility;
+- valid attributes and operators;
+- relationship consistency;
+- aggregation validity;
+- query regime constraints.
 
-**Subcomponents**
+Invalid representations can be identified before reaching the execution layer.
 
-* **Query Translation (Cypher Generation)**: Structured query representations are compiled into executable queries, ensuring compatibility with graph database systems.
+#### 4. Query Compilation
 
-### Pipeline Summary
-At a high level, the system can be summarized as:
+After validation, the structured representation is transformed into an executable graph query language, graph query languages such as Cypher.
+
+The compiler deterministically maps:
+
+- targets → graph nodes;
+- paths → relationships;
+- filters → conditions;
+- aggregations → aggregation clauses;
+- ordering and limits → query modifiers.
+
+#### 5. Graph Database Execution
+
+The compiled query is executed against the graph database, producing the final result.
+
+The separation between these stages enables GQC v1 to combine the flexibility of language models with the reliability of explicit schema constraints and deterministic query generation.
+
+### 2.2 System Components
+
+The GQC v1 architecture is composed of the following components:
+
+#### Schema Definition
+
+The schema defines the available graph entities, attributes, relationships, and valid query structures.
+
+It provides the constraints required for intent generation, validation, and query compilation.
+
+#### Intent Generation and Dataset Construction
+
+The dataset generation pipeline creates structured query intents from a predefined graph schema.
+
+This component uses:
+
+- structural regimes;
+- field-level policies;
+- semantic constraints.
+
+Structural regimes define supported query patterns and complexity levels, while field-level policies control valid combinations of attributes, operators, and values.
+
+The generated intents are transformed into natural language examples, creating supervised data for model adaptation.
+
+#### Model Adaptation
+
+The adapted language model learns the mapping between natural language questions and structured query representations.
+
+The model does not directly generate executable graph queries. Instead, it predicts an intermediate representation that can be validated and compiled by downstream components.
+
+#### Semantic Validation Layer
+
+The validator ensures that predicted representations comply with the defined schema and semantic rules.
+
+It operates independently from the language model, providing an explicit control mechanism over generated outputs.
+
+#### Query Compiler
+
+The compiler transforms validated JSON representations into executable graph queries.
+
+Query compilation is deterministic and separated from language generation, ensuring that execution logic remains independent from model predictions.
+
+### 2.3 Natural Language to JSON Flow
+
+The central operation of GQC v1 is the transformation:
 
 ```text
-Intent Generation → Dataset Construction → Model Adaptation → Query Compilation
+User Question
+      |
+      v
+Natural Language Interpretation
+      |
+      v
+Schema-Constrained Intent Generation
+      |
+      v
+Structured Intent JSON
 ```
 
-This modular architecture allows each stage to operate independently while contributing to a unified objective: enabling reliable and structurally consistent query generation with eventual executability in graph database systems.
+For example:
 
-The design follows a structure-first approach, where structural validity is prioritized before natural language generation and downstream execution.
+Natural language question:
+
+```text
+"Quais petshops possuem nota acima de 4 no bairro Centro?"
+```
+
+The model identifies:
+
+```json
+{
+  "regime": "relational_lookup_query",
+  "target": {
+    "label": "Place"
+  },
+  "filters": [
+    {
+      "attribute": "rating",
+      "node_label": "Place",
+      "operator": ">",
+      "value": 4
+    },
+    {
+      "attribute": "type",
+      "node_label": "Place",
+      "operator": "=",
+      "value": "pet_store"
+    }
+  ],
+  "path": [
+    {
+      "from": "Place",
+      "relationship": "LOCATED_IN",
+      "to": "Neighborhood"
+    }
+  ],
+  "return_attributes": [
+    "name"
+  ]
+}
+```
+
+This representation preserves the semantic structure of the question while remaining independent from the final query language.
+
+The separation between natural language understanding, structured representation, validation, and compilation allows GQC v1 to provide a more interpretable and controllable approach than end-to-end text-to-query generation.
 
 ## 4. Methodology
 
