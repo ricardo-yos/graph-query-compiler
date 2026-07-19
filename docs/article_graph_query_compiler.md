@@ -236,6 +236,12 @@ The model identifies:
       "node_label": "Place",
       "operator": "=",
       "value": "pet_store"
+    },
+    {
+      "attribute": "name",
+      "node_label": "Neighborhood",
+      "operator": "=",
+      "value": "Centro"
     }
   ],
   "path": [
