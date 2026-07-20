@@ -261,6 +261,230 @@ This representation preserves the semantic structure of the question while remai
 
 The separation between natural language understanding, structured representation, validation, and compilation allows GQC v1 to provide a more interpretable and controllable approach than end-to-end text-to-query generation.
 
+## 3. Schema Design
+
+The schema design defines the structured representation used by GQC v1 to describe graph queries.
+
+Unlike direct text-to-query approaches, GQC introduces an intermediate schema-aware representation that explicitly models query intent, entities, relationships, constraints, and output requirements.
+
+The schema acts as a contract between the language model, validation layer, and query compiler, ensuring that generated representations remain compatible with the graph structure and execution rules.
+
+### 3.1 Schema Structure
+
+The GQC v1 schema represents graph query intents through a collection of structured fields:
+
+```text
+Query Intent
+     |
+     +-- regime
+     |
+     +-- target
+     |
+     +-- filters
+     |
+     +-- path
+     |
+     +-- aggregate
+     |
+     +-- order_by
+     |
+     +-- limit
+     |
+     +-- return_attributes
+```
+
+Each field has a specific role in describing the intended query operation.
+
+The schema separates:
+
+- **query semantics**, represented by regimes, filters, aggregations, and ordering;
+- **graph structure**, represented by targets and relationship paths;
+- **output requirements**, represented by returned attributes and limits.
+
+This separation allows the system to validate query intent before compilation.
+
+### 3.2 Query Regimes
+
+GQC v1 defines a set of structural regimes that represent different query patterns and complexity levels.
+
+Regimes determine the expected combination of fields and the required graph operations.
+
+The supported regimes are:
+
+| Regime                         | Description                                                      |
+| ------------------------------ | ---------------------------------------------------------------- |
+| `simple_lookup_query`          | Retrieves entities based on attributes from a single node        |
+| `simple_count_query`           | Counts entities from a single node                               |
+| `simple_aggregation_query`     | Applies aggregation functions over attributes from a single node |
+| `simple_ranking_query`         | Returns ordered entities from a single node                      |
+| `relational_lookup_query`      | Retrieves entities using graph relationships                     |
+| `relational_count_query`       | Counts entities across graph relationships                       |
+| `relational_aggregation_query` | Applies aggregation over related entities                        |
+| `relational_ranking_query`     | Returns ordered entities using graph relationships               |
+
+Simple regimes operate without relationship traversal, while relational regimes require at least one graph path.
+
+### 3.3 Schema Fields
+
+The main schema fields are:
+
+`regime`
+
+Defines the structural query pattern and determines valid field combinations.
+
+`target`
+
+Defines the main graph entity returned by the query.
+
+Example:
+
+```json
+{
+  "label": "Place"
+}
+```
+
+`filters`
+
+Defines constraints applied to graph entities.
+
+Each filter specifies:
+
+- attribute;
+- node label;
+- operator;
+- value.
+
+Example:
+
+```json
+{
+  "attribute": "rating",
+  "node_label": "Place",
+  "operator": ">",
+  "value": 4
+}
+```
+
+`path`
+
+Defines graph traversal between entities.
+
+Example:
+
+```json
+[
+  {
+    "from": "Place",
+    "relationship": "LOCATED_IN",
+    "to": "Neighborhood"
+  }
+]
+```
+
+`aggregate`
+
+Defines aggregation operations such as minimum, maximum, average, or count.
+
+Example:
+
+```json
+{
+  "attribute": "rating",
+  "function": "avg"
+}
+```
+
+`order_by`
+
+Defines ordering operations for ranking queries.
+
+Example:
+
+```json
+{
+  "attribute": "rating",
+  "direction": "desc"
+}
+```
+
+`limit`
+
+Restricts the number of returned entities.
+
+Example:
+
+```json
+{
+  "value": 10
+}
+```
+
+`return_attributes`
+
+Defines the attributes returned after execution.
+
+Example:
+
+```json
+[
+  "name"
+]
+```
+
+### 3.4 Complete Schema Example
+
+Natural language question:
+
+```text
+"Quais petshops possuem nota acima de 4 no bairro Centro?"
+```
+
+Structured query intent:
+
+```json
+{
+  "regime": "relational_lookup_query",
+  "target": {
+    "label": "Place"
+  },
+  "filters": [
+    {
+      "attribute": "rating",
+      "node_label": "Place",
+      "operator": ">",
+      "value": 4
+    },
+    {
+      "attribute": "type",
+      "node_label": "Place",
+      "operator": "=",
+      "value": "pet_store"
+    },
+    {
+      "attribute": "name",
+      "node_label": "Neighborhood",
+      "operator": "=",
+      "value": "Centro"
+    }
+  ],
+  "path": [
+    {
+      "from": "Place",
+      "relationship": "LOCATED_IN",
+      "to": "Neighborhood"
+    }
+  ],
+  "return_attributes": [
+    "name"
+  ]
+}
+```
+
+This schema representation captures the complete semantic structure of the query while remaining independent from the underlying graph query language.
+
+By enforcing explicit structural rules, GQC v1 transforms query generation from unconstrained text generation into a schema-guided prediction problem.
+
 ## 4. Methodology
 
 This section describes the core components of the Graph Query Compiler (GQC), focusing on how structured query representations are generated, validated, and transformed into executable queries. The methodology is designed to maintain schema consistency and to control the combinatorial space of possible queries, aiming to balance diversity with structural correctness.
