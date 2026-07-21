@@ -485,6 +485,172 @@ This schema representation captures the complete semantic structure of the query
 
 By enforcing explicit structural rules, GQC v1 transforms query generation from unconstrained text generation into a schema-guided prediction problem.
 
+## 4. Schema-Driven Dataset Construction
+
+The GQC v1 dataset construction process is based on a schema-driven synthetic generation approach.
+
+Instead of relying exclusively on manually collected query examples, GQC generates structured query intents from predefined graph structures, semantic rules, and field-level constraints.
+
+The objective is to create supervised data where each natural language question is paired with a validated structured representation.
+
+The generation pipeline follows:
+
+```text
+Graph Schema
+      |
+      v
+Structural Regime Selection
+      |
+      v
+Intent Expansion
+      |
+      v
+Semantic Validation
+      |
+      v
+Natural Language Generation
+      |
+      v
+Training Examples
+```
+
+This approach allows controlled coverage of different query patterns while preserving consistency between natural language expressions and graph query semantics.
+
+### 4.1 Intent Generation
+
+The generation process starts from the graph schema and expands valid query structures according to predefined rules.
+
+The generator creates structured intents by combining:
+
+- query regimes;
+- graph paths;
+- target entities;
+- filters;
+- operators;
+- aggregation functions;
+- ordering constraints;
+- return attributes.
+
+Each generated intent represents a valid query structure before being converted into a natural language question.
+
+This separation allows the system to control the distribution of examples and avoid invalid query combinations.
+
+### 4.2 Structural Regimes
+
+Structural regimes define the supported query patterns and determine which schema fields are applicable.
+
+For example:
+
+- lookup regimes require entity retrieval;
+- count regimes require counting operations;
+- aggregation regimes require aggregation functions;
+- ranking regimes require ordering operations.
+
+The distinction between simple and relational regimes controls graph complexity:
+
+```text
+Simple Query
+    Entity
+      |
+      v
+    Filter
+
+Relational Query
+    Entity
+      |
+      v
+ Relationship Traversal
+      |
+      v
+ Related Entity Constraints
+```
+
+Simple regimes operate on a single graph entity, while relational regimes require explicit relationship traversal through graph paths.
+
+### 4.3 Field-Level Policies
+
+Field-level policies control how individual schema components are generated.
+
+They define valid combinations for:
+
+- attributes;
+- operators;
+- values;
+- filters;
+- aggregation functions;
+- ordering directions.
+
+Examples:
+
+- `rating` supports numerical comparison operators;
+- `type` supports categorical equality constraints;
+- ranking queries require an ordering attribute;
+- aggregation queries require an aggregate function.
+
+These policies reduce invalid combinations and improve semantic consistency in generated examples.
+
+### 4.4 Intent Validation During Generation
+
+Before becoming training data, generated intents are validated against schema and semantic constraints.
+
+The validation stage checks:
+
+- valid regime-field combinations;
+- required fields;
+- graph path consistency;
+- attribute compatibility;
+- operator compatibility;
+- aggregation rules.
+
+Invalid intents are discarded, ensuring that only structurally valid examples are used for model adaptation.
+
+### 4.5 Natural Language Generation
+
+After validation, structured intents are converted into natural language questions.
+
+The generated questions preserve the semantic meaning of the underlying intent while introducing linguistic variation.
+
+For example:
+
+Structured intent:
+
+```json
+{
+  "regime": "simple_count_query",
+  "filters": [
+    {
+      "attribute": "type",
+      "node_label": "Place",
+      "operator": "=",
+      "value": "pet_store"
+    }
+  ]
+}
+```
+
+Possible natural language expressions:
+
+```text
+"Quantos petshops existem?"
+```
+
+```text
+"Qual é a quantidade de lojas classificadas como petshop?"
+```
+
+The semantic structure remains unchanged while the linguistic surface form varies.
+
+### 4.6 Dataset Characteristics
+
+The generated dataset provides:
+
+- controlled structural diversity;
+- balanced coverage across query regimes;
+- explicit semantic supervision;
+- consistent alignment between language and graph structure.
+
+By generating examples from the schema itself, GQC v1 transforms dataset construction into a controlled engineering process rather than a purely data collection problem.
+
 ## 4. Methodology
 
 This section describes the core components of the Graph Query Compiler (GQC), focusing on how structured query representations are generated, validated, and transformed into executable queries. The methodology is designed to maintain schema consistency and to control the combinatorial space of possible queries, aiming to balance diversity with structural correctness.
