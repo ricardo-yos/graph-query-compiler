@@ -651,7 +651,106 @@ The generated dataset provides:
 
 By generating examples from the schema itself, GQC v1 transforms dataset construction into a controlled engineering process rather than a purely data collection problem.
 
-## 5. Model Training
+## 5. Dataset Design and Learning Structure
+
+The performance of a language model adapted for structured generation depends not only on the model architecture, but also on the quality and organization of the training dataset.
+
+In GQC v1, the dataset is considered a core component of the system design. It defines the semantic space that the model learns and establishes the relationship between natural language expressions and structured query intents.
+
+Unlike traditional text generation tasks, where the output space is mostly unconstrained, GQC v1 uses a schema-driven dataset where all examples are derived from valid graph query structures.
+
+The dataset construction process creates an explicit mapping:
+
+```text
+Natural Language Question
+            |
+            v
+Structured Query Intent
+            |
+            v
+Graph Query Semantics
+```
+
+This alignment reduces ambiguity and allows the model to focus on learning valid transformations within the defined query space.
+
+### 5.1 Structural Coverage
+
+A key objective of dataset design is ensuring coverage of the query structures supported by the GQC schema.
+
+The dataset must represent:
+
+- different query regimes;
+- simple and relational patterns;
+- lookup, count, aggregation, and ranking operations;
+- graph traversal structures;
+- filter combinations;
+- semantic operators.
+
+Insufficient structural coverage can cause the model to learn incomplete mappings and fail when encountering unseen query compositions.
+
+### 5.2 Distribution Control
+
+The distribution of examples directly influences model behavior.
+
+Without explicit control, simpler query patterns may dominate the dataset because they are easier to generate and occur more frequently.
+
+GQC v1 applies balancing strategies across multiple dimensions:
+
+- query regimes;
+- structural complexity;
+- relational versus non-relational queries;
+- operator usage;
+- aggregation patterns.
+
+The objective is to expose the model to the complete capability space of the schema rather than optimizing only for the most frequent cases.
+
+### 5.3 Reducing the Learning Search Space
+
+A fundamental principle of GQC v1 is that explicit structure reduces the search space of possible model outputs.
+
+Instead of learning an unrestricted mapping:
+
+```text
+Natural Language
+        |
+        v
+Any Possible Query Representation
+```
+
+the model learns:
+
+```text
+Natural Language
+        |
+        v
+Schema-Constrained Intent Representation
+```
+
+The schema, generation rules, and validation mechanisms restrict the set of valid outputs that the model must learn.
+
+From a learning perspective, this reduces uncertainty in the output space by providing stronger inductive bias.
+
+However, the complexity is not removed. It is transferred into explicit system components:
+
+- schema design;
+- intent generation rules;
+- semantic validation.
+
+This trade-off improves interpretability and controllability of the final system.
+
+### 5.4 Dataset as Part of the Architecture
+
+In GQC v1, dataset construction is not an external preprocessing step.
+
+The dataset acts as an executable specification of the supported query language, defining:
+
+- which structures are valid;
+- which semantic combinations are allowed;
+- which behaviors the model should learn.
+
+Therefore, dataset design becomes an architectural component that directly affects model reliability, generalization, and interpretability.
+
+## 6. Model Training
 
 The GQC v1 model training process focuses on adapting a pre-trained language model to generate schema-constrained query intents from natural language questions.
 
@@ -671,7 +770,7 @@ Natural Language Question
 
 The model learns to generate valid intermediate representations according to the GQC schema while preserving the semantic meaning of the original question.
 
-### 5.1 Base Model
+### 6.1 Base Model
 
 GQC v1 uses an instruction-tuned large language model as the foundation for adaptation.
 
@@ -687,7 +786,7 @@ The adaptation process leverages the model's existing capabilities for:
 
 Fine-tuning focuses these capabilities on the graph query domain.
 
-### 5.2 Parameter-Efficient Fine-Tuning (LoRA / QLoRA)
+### 6.2 Parameter-Efficient Fine-Tuning (LoRA / QLoRA)
 
 GQC v1 uses Parameter-Efficient Fine-Tuning (PEFT) techniques to adapt the base model.
 
@@ -715,7 +814,7 @@ The advantages of this approach include:
 
 For GQC v1, QLoRA enables experimentation with domain-specific structured generation using consumer-grade hardware.
 
-### 5.3 Training Configuration and Hyperparameters
+### 6.3 Training Configuration and Hyperparameters
 
 The training process uses a supervised fine-tuning objective where each example contains:
 
@@ -744,7 +843,7 @@ Hyperparameter selection focuses on balancing:
 - JSON generation reliability;
 - generalization across query regimes.
 
-### 5.4 Training Prompt Design
+### 6.4 Training Prompt Design
 
 The training prompt defines how the model receives instructions and how the expected output format is represented.
 
@@ -786,7 +885,7 @@ The prompt design aims to reduce ambiguity by explicitly describing the expected
 
 The model is therefore optimized for structured semantic prediction rather than unrestricted text generation.
 
-### 5.5 Training Objective
+### 6.5 Training Objective
 
 The training objective is supervised next-token prediction over the structured intent representation.
 
