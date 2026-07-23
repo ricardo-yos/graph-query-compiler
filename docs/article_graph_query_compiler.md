@@ -913,3 +913,101 @@ where:
 The objective is to maximize the probability of generating the correct schema representation while maintaining semantic consistency with the input question.
 
 This training strategy aligns the language model with the GQC architecture, where generation is constrained by explicit schema definitions.
+
+## 7. Inference Pipeline
+
+After model adaptation, GQC v1 uses the fine-tuned language model to generate structured query intents from natural language questions.
+
+The inference stage performs the semantic mapping learned during training:
+
+```text
+Natural Language Question
+              |
+              v
+      Fine-tuned Language Model
+              |
+              v
+   Structured Query Intent (JSON)
+```
+
+The generated JSON represents the semantic interpretation of the user request according to the GQC schema.
+
+The model predicts the structured components required to represent the query intent, including:
+
+- query regime;
+- target entity;
+- relationship paths;
+- filters;
+- aggregation operations;
+- ordering constraints;
+- limits;
+- returned attributes.
+
+The generated structured representation is the primary output of the inference stage and can be evaluated independently through schema-based metrics.
+
+### 7.1 Model Adapter Merge
+
+During training, GQC v1 uses LoRA-based parameter-efficient fine-tuning, where only adapter parameters are optimized while the original model weights remain frozen.
+
+After training, the learned LoRA adapters are merged with the base model to create a standalone model artifact.
+
+The merge process is:
+
+```text
+Base Model
+      +
+LoRA Adapter Weights
+      |
+      v
+Merged Model
+```
+
+The resulting model contains the adapted parameters required for inference without requiring the adapter components separately.
+
+This step simplifies deployment and provides a single model representation for subsequent optimization and execution.
+
+### 7.2 GGUF Conversion and Quantization
+
+To enable efficient local inference, the merged model is converted into the GGUF format.
+
+GGUF provides a model format optimized for lightweight inference environments, allowing models to be executed using frameworks such as llama.cpp.
+
+After conversion, the model is quantized to reduce memory requirements and improve inference efficiency.
+
+The optimization pipeline is:
+
+```text
+Merged Model
+      |
+      v
+GGUF Conversion
+      |
+      v
+Quantized Model
+```
+
+Quantization reduces the numerical precision of model weights while maintaining the capability of generating structured query intents.
+
+This enables the adapted model to be executed on hardware with limited memory resources.
+
+### 7.3 Local Inference with llama.cpp
+
+GQC v1 uses llama.cpp as the inference runtime for the quantized model.
+
+Local inference provides an efficient environment for iterative experimentation and evaluation of different model configurations.
+
+The ability to run inference locally enables rapid testing of:
+
+- dataset variations;
+- prompt modifications;
+- fine-tuning configurations;
+- model versions.
+
+The main advantages of local inference are:
+
+- reduced inference cost;
+- reproducible experiments;
+- faster development cycles;
+- greater control over execution parameters.
+
+This capability is particularly important during model refinement, where multiple experiments are required to improve structured intent generation performance.
