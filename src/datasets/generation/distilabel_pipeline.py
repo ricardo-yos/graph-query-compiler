@@ -117,7 +117,6 @@ TEMPERATURE = cfg["generation"]["temperature"]
 BATCH_SIZE = cfg["generation"]["batch_size"]
 SLEEP_SECONDS = cfg["generation"]["sleep_seconds"]
 
-# dataset paths
 INTENTS_FILE = cfg["input"]["intents_file"]
 OUTPUT_FILE = cfg["output"]["dataset_file"]
 
@@ -181,20 +180,16 @@ def chunk_list(lst: List[Any], chunk_size: int) -> List[List[Any]]:
 
 def intent_to_text(intent: dict) -> str:
     """
-    Convert a structured intent into a deterministic semantic
-    intermediate representation for LLM prompting.
+    Convert a structured graph-query intent into a deterministic
+    semantic representation for LLM prompting.
 
-    The generated representation exposes structural query
-    semantics explicitly while remaining easy for language
-    models to verbalize into natural questions.
-
-    The representation preserves:
-    - regime semantics
-    - traversal structure
-    - filter ownership
-    - aggregation behavior
-    - ordering semantics
-    - limiting constraints
+    Preserves:
+    - query regime
+    - relationships
+    - filters
+    - aggregations
+    - ordering
+    - limits
     - return attributes
 
     Parameters
@@ -205,7 +200,7 @@ def intent_to_text(intent: dict) -> str:
     Returns
     -------
     str
-        Deterministic semantic representation used for prompting.
+        Semantic representation used for question generation.
     """
 
     intent_meta = intent.get("intent", {})
@@ -377,31 +372,25 @@ def intent_to_text(intent: dict) -> str:
 
 def normalize_operator(operator: str) -> str:
     """
-    Convert symbolic operators into deterministic semantic text.
+    Convert symbolic operators into distinct natural language expressions.
 
-    Examples
-    --------
-    >  -> greater than
-    <= -> less than or equal to
-    =  -> equal to
+    The mapping prioritizes semantic separation between strict
+    and inclusive comparisons.
 
-    Parameters
-    ----------
-    operator : str
-        Symbolic operator.
-
-    Returns
-    -------
-    str
-        Semantic operator representation.
+    Examples:
+        >  -> more than
+        >= -> at least
+        <  -> less than
+        <= -> at most
+        =  -> exactly equal to
     """
 
     mapping = {
-        ">": "greater than",
-        ">=": "greater than or equal to",
+        ">": "more than",
+        ">=": "at least",
         "<": "less than",
-        "<=": "less than or equal to",
-        "=": "equal to",
+        "<=": "at most",
+        "=": "exactly equal to",
         "contains": "contains"
     }
 
@@ -455,22 +444,19 @@ def safe_value(obj: Dict[str, Any]) -> str:
 
 class IntentToInstruction(Step):
     """
-    Convert structured intents into controlled generation prompts.
+    Convert structured intents into controlled LLM instructions.
 
-    This step transforms validated graph-query intents into
-    deterministic instructions optimized for natural-language
-    question generation.
+    Generates prompts that preserve:
+    - semantic fidelity
+    - schema recoverability
+    - filters and operators
+    - relationship structure
+    - single-question output constraint
 
-    The generated prompts constrain the LLM to:
-    - preserve semantic fidelity
-    - preserve structural recoverability
-    - avoid hallucinations
-    - maintain relationship ownership
-    - preserve filters and operators
-    - generate exactly one question
-
-    The resulting prompts are intentionally restrictive to
-    maximize consistency and dataset quality.
+    Parameters
+    ----------
+    Step
+        Base pipeline step.
     """
 
     outputs: ClassVar[list[str]] = ["instruction"]
@@ -531,67 +517,93 @@ class IntentToInstruction(Step):
                 "- Write ONLY in pt-BR\n\n"
 
                 "PRIMARY GOAL:\n"
-                "- Preserve the exact semantic structure\n"
-                "- Preserve full structural recoverability\n"
-                "- Include ALL filters, relationships, aggregations, ordering, and limits\n"
-                "- Keep every condition attached to the correct entity\n\n"
+                "- Preserve the exact semantic structure of the intent\n"
+                "- Generate a natural user question with full structural recoverability\n\n"
 
-                "STRICT RULES:\n"
-                "- NEVER add information\n"
-                "- NEVER omit information\n"
-                "- NEVER infer hidden meaning\n"
-                "- NEVER use world knowledge\n"
-                "- NEVER reinterpret entities\n"
-                "- NEVER reinterpret relationships\n"
-                "- NEVER move conditions between entities\n"
-                "- NEVER introduce concepts not explicitly present\n"
-                "- NEVER summarize filters\n"
-                "- NEVER replace operators with vague language\n"
-                "- NEVER invert comparison operators\n"
-                "- NEVER replace ordering semantics\n"
-                "- NEVER introduce popularity, relevance, importance, size, or quality semantics\n"
-                "- Prefer semantic fidelity over fluency\n"
-                "- Repetition is acceptable if necessary\n\n"
+                "CORE CONSTRAINTS:\n"
+                "- Do NOT add, remove, or infer information\n"
+                "- Do NOT reinterpret entities, filters, attributes, or relationships\n"
+                "- The generated question must represent ONLY the provided intent\n\n"
 
-                "ENTITY RULES:\n"
-                "- The target entity MUST be the main subject of the question\n"
-                "- Preserve entity associations explicitly\n"
-                "- Preserve relationship traversal semantics exactly\n\n"
+                "REGIME RULES:\n"
+                "- The regime strictly defines the allowed semantics\n"
+                "- simple_lookup_query: filtering + direct retrieval only\n"
+                "- simple_count_query: explicitly ask for counting (quantos)\n"
+                "- simple_aggregation_query: explicitly ask for a single aggregated value\n"
+                "- simple_ranking_query: express ordering only when order_by exists\n"
+                "- relational_*: preserve all relationships exactly\n\n"
 
-                "FILTER RULES:\n"
-                "- Preserve numeric comparisons exactly\n"
-                "- Preserve comparison direction exactly\n"
-                "- Preserve attribute semantics exactly\n\n"
+                "RETURN ATTRIBUTES:\n"
+                "- Mention all return_attributes exactly once\n"
+                "- Never mention attributes not present in return_attributes\n"
+                "- Do not summarize or merge attributes\n\n"
 
-                "AGGREGATION MAPPINGS:\n"
-                "- count -> quantos\n"
+                "ATTRIBUTE MAPPINGS:\n"
+                "- name -> nome\n"
+                "- rating -> avaliação\n"
+                "- price -> preço\n"
+                "- num_reviews -> número de avaliações\n"
+                "- duration -> duração\n\n"
+
+                "DOMAIN TERMINOLOGY:\n"
+                "- Domain categories come ONLY from Place type filters\n"
+                "- Target labels are NOT filters\n"
+                "- Never infer domain categories from context\n"
+                "- Place.type=pet_store -> use ONLY 'petshop'\n"
+                "- Place.type=veterinary_care -> use ONLY 'clínica veterinária'\n"
+                "- Never mix domain types\n\n"
+
+                "ENTITY AND FILTER RULES:\n"
+                "- Preserve all filters exactly\n"
+                "- Never create filters that are not present in the intent\n"
+                "- Never convert target labels into filters\n"
+                "- Only Place nodes can have type filters\n\n"
+
+                "OPERATOR SEMANTICS:\n"
+                "- > -> more than\n"
+                "- >= -> at least\n"
+                "- < -> less than\n"
+                "- <= -> at most\n"
+                "- = -> exactly\n"
+                "- Preserve comparison direction exactly\n\n"
+
+                "AGGREGATION RULES:\n"
+                "- Aggregation returns ONE computed value\n"
                 "- avg -> média\n"
                 "- sum -> soma total\n"
-                "- max -> maior\n"
-                "- min -> menor\n\n"
+                "- max -> maior valor\n"
+                "- min -> menor valor\n"
+                "- count -> quantidade\n"
+                "- Never use order_by for aggregation\n\n"
+
+                "RANKING VS AGGREGATION:\n"
+                "- Ranking returns an ordered list of entities\n"
+                "- Aggregation returns a single value\n"
+                "- 'Quais são os maiores...' -> ranking\n"
+                "- 'Qual é o maior valor...' -> aggregation\n"
+                "- Never transform aggregation into ranking\n\n"
 
                 "ORDERING RULES:\n"
+                "- Preserve order_by exactly\n"
+                "- Keep ordering separate from filters\n"
                 "- asc -> ordem crescente\n"
                 "- desc -> ordem decrescente\n"
-                "- If ordering by name, explicitly mention alphabetical ordering\n"
-                "- Do NOT replace ordering with ranking or popularity semantics\n\n"
+                "- Mention ordering whenever order_by exists\n"
+                "- Never introduce ranking semantics not present in the intent\n\n"
 
                 "LIMIT RULES:\n"
-                "- Express limits explicitly when present\n"
-                "- Example: 'os 10 primeiros'\n\n"
+                "- Express limits explicitly\n"
+                "- Example: limit=10 -> 'os 10 primeiros'\n\n"
 
                 "STYLE:\n"
-                "- Write a natural but structurally faithful question\n"
-                "- Avoid unnecessary creativity\n"
-                "- Avoid database terminology\n"
-                "- Avoid excessive paraphrasing\n\n"
+                "- Natural Brazilian Portuguese\n"
+                "- Minimal grammatical adjustments allowed\n"
+                "- Never change semantic meaning\n\n"
 
-                "OUTPUT RULES:\n"
-                "- Generate EXACTLY ONE question\n"
-                "- Output ONLY the final question\n"
+                "OUTPUT:\n"
+                "- Exactly ONE question\n"
                 "- No explanations\n"
-                "- No JSON\n"
-                "- No lists\n\n"
+                "- No JSON\n\n"
 
                 "[USER]\n"
                 f"{intent_text}"
@@ -790,7 +802,8 @@ def main() -> None:
         tqdm(batches, desc="Generating questions", unit="batch")
     ):
 
-        # each batch runs as an independent distilabel pipeline
+        # Each batch uses an isolated pipeline execution to avoid
+        # failures affecting the entire dataset generation process.
         with Pipeline(name=f"question-batch-{batch_idx}") as pipeline:
 
             load_step = LoadDataFromDicts(
