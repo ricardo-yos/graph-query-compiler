@@ -242,26 +242,26 @@ python -m src.fine_tuning.train_qlora
 
 ### Merge LoRA adapter (optional)
 
-Merge the fine-tuned adapter with the base model:
+Merge the trained LoRA adapter with the base model to create a standalone Hugging Face model:
 
 ```bash
-python -m src.fine_tuning.merge_qlora
+python -m src.deployment.merge_qlora
 ```
 
 ### Convert model to GGUF (optional)
 
-Convert the merged model to GGUF format for optimized local inference:
+Convert the merged Hugging Face model to GGUF format for optimized local inference with llama.cpp:
 
 ```bash
-python -m src.fine_tuning.convert_to_gguf
+python -m src.deployment.convert_to_gguf
 ```
 
 ### Quantize model (optional)
 
-Apply quantization to reduce memory usage and improve inference performance:
+Apply GGUF quantization to reduce memory consumption and improve inference efficiency:
 
 ```bash
-python -m src.fine_tuning.quantize_model
+python -m src.deployment.quantize_model
 ```
 
 ### Run inference
@@ -278,7 +278,7 @@ Evaluate structured schema generation performance:
 python -m src.benchmark.benchmark_runner
 ```
 
-> GGUF conversion and quantization are optional steps intended for optimized local inference.
+> GGUF conversion and quantization are optional deployment steps intended for optimized local inference.
 
 ---
 
@@ -286,11 +286,12 @@ python -m src.benchmark.benchmark_runner
 
 ```text
 src/
-├── compiler/          # End-to-end query compilation pipeline (schema → Cypher)
-├── inference/         # Model inference and structured intent schema generation
-├── intents/           # Structural intent generation and semantic validation
-├── datasets/          # Training dataset generation, preprocessing, and splitting
-├── fine_tuning/       # QLoRA training, model merging, and model optimization
+├── compiler/          # End-to-end query compilation pipeline (intent → schema → Cypher)
+├── inference/         # Model inference and structured intent generation
+├── intents/           # Structural intent generation, validation, and policies
+├── datasets/          # Dataset generation, augmentation, preprocessing, and splitting
+├── fine_tuning/       # QLoRA training and adapter fine-tuning
+├── deployment/        # Model merging, GGUF conversion, and quantization
 ├── benchmark/         # Benchmark execution and evaluation metrics
 ├── config/            # Graph schema definitions, rules, and configuration
 ```
