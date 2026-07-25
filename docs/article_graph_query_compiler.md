@@ -1091,3 +1091,183 @@ This separation improves:
 - controllability;
 - debugging;
 - system reliability.
+
+## 9. Structured Intent Generation Benchmark
+
+To evaluate the ability of GQC v1 to generate structured query intents, a dedicated Structured Intent Generation Benchmark was created based on the GQC schema.
+
+The benchmark measures how accurately the model maps natural language questions into structured JSON representations for supported simple query patterns.
+
+The evaluation focuses on the correctness of the generated schema and the model's ability to identify the intended query structure.
+
+Unlike traditional text generation evaluation, the benchmark evaluates structural correctness rather than surface-level text similarity.
+
+### 9.1 Benchmark Construction
+
+The benchmark dataset was constructed using the supported simple query regimes of GQC v1.
+
+The benchmark covers the following query patterns:
+
+- simple lookup queries;
+- simple count queries;
+- simple aggregation queries;
+- simple ranking queries.
+
+Each benchmark example contains:
+
+- natural language question;
+- expected structured query intent (ground-truth structured JSON representation);
+- schema fields used for evaluation.
+
+The benchmark examples are generated from valid schema configurations and designed to evaluate the model's ability to map natural language expressions into structured query representations.
+
+### 9.2 Evaluation Criteria
+
+Since structured intent generation contains multiple levels of correctness, GQC v1 evaluates model performance using complementary metrics.
+
+The evaluation framework includes:
+
+- Exact Schema Match;
+- Field Accuracy;
+- Component Accuracy;
+- Regime Accuracy.
+
+These metrics provide both a strict measurement of complete schema correctness and a detailed analysis of individual prediction capabilities.
+
+### 9.3 Exact Schema Match
+
+Exact Schema Match measures whether the predicted JSON representation exactly matches the expected structured intent.
+
+A prediction is considered correct only when all relevant schema components are correctly generated.
+
+The comparison includes:
+
+- query regime;
+- target entity;
+- relationship paths;
+- filters;
+- aggregation operations;
+- ordering constraints;
+- returned attributes.
+
+This metric represents the strictest evaluation because a single incorrect field causes the complete schema to be considered incorrect.
+
+### 9.4 Regime Accuracy
+
+Regime Accuracy measures whether the model correctly identifies the structural query type.
+
+The supported GQC v1 regimes are:
+
+- simple_lookup_query;
+- simple_count_query;
+- simple_aggregation_query;
+- simple_ranking_query.
+
+This metric evaluates whether the model understands the high-level operation requested by the user.
+
+A high Regime Accuracy combined with lower Exact Schema Match indicates that the model recognizes the query category but still struggles with precise schema generation.
+
+### 9.5 Field Accuracy
+
+Field Accuracy measures the correctness of individual schema fields independently.
+
+Unlike Exact Schema Match, this metric captures partial correctness.
+
+For example, a model may correctly identify:
+
+- the query regime;
+- the target entity;
+- the aggregation attribute;
+
+while making an error in a filter operator or returned attribute.
+
+Field Accuracy helps identify which schema components are correctly learned and which require further improvement.
+
+The evaluated fields include:
+
+- regime;
+- target;
+- filters;
+- aggregation attributes;
+- aggregation functions;
+- ordering;
+- limits;
+- return attributes.
+
+### 9.6 Component Accuracy
+
+Component Accuracy provides a more detailed evaluation of individual components inside complex schema fields.
+
+Examples include:
+
+- filter attribute;
+- filter operator;
+- filter value;
+- aggregation function;
+- aggregation attribute;
+- ordering attribute.
+
+This level of analysis helps identify specific semantic errors.
+
+For example:
+
+```text
+Expected:
+
+rating > 4
+
+Predicted:
+
+rating >= 4
+```
+
+The model correctly identified the filtering attribute and condition type but failed to preserve the exact operator semantics.
+
+### 9.7 Error Analysis
+
+Beyond aggregate metrics, GQC v1 performs error analysis to identify failure patterns during structured intent generation.
+
+Since the model output is a structured representation, errors can occur at different levels:
+
+- incorrect query regime classification;
+- missing or extra filters;
+- incorrect operators;
+- incorrect aggregation structures;
+- incorrect ordering constraints;
+- invalid field combinations.
+
+Error analysis helps identify specific weaknesses in the dataset design, prompt formulation, and model adaptation process.
+
+For example:
+
+```text
+Question:
+
+"Qual o petshop com maior nota?"
+
+Expected:
+
+simple_ranking_query
+
+Predicted:
+
+simple_aggregation_query
+```
+
+This error indicates a semantic confusion between ranking and aggregation operations, where the model identifies a related concept but selects the incorrect query structure.
+
+Similarly:
+
+```text
+Expected:
+
+rating > 4
+
+Predicted:
+
+rating >= 4
+```
+
+This represents a fine-grained operator semantic error, where the model correctly identifies the filtering attribute but fails to preserve the exact comparison condition.
+
+These analyses provide insights beyond aggregate metrics by revealing specific limitations in schema generation and guiding future improvements in dataset construction and model adaptation.
