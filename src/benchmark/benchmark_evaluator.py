@@ -446,6 +446,36 @@ class BenchmarkEvaluator:
     # Component-level statistics
     # ============================================================
 
+    def _normalize_list(self, path, value):
+        """
+        Normalize unordered schema lists before comparison.
+
+        Some schema components have no semantic ordering:
+        - filters
+        - return_attributes
+        """
+
+        if path == "return_attributes":
+
+            return sorted(value)
+
+
+        if path == "filters":
+
+            return sorted(
+                value,
+                key=lambda x: (
+                    x.get("node_label"),
+                    x.get("attribute"),
+                    x.get("operator"),
+                    str(x.get("value"))
+                )
+            )
+
+
+        return value
+
+
     def _update_component_stats(
         self,
         gold,
@@ -460,6 +490,7 @@ class BenchmarkEvaluator:
         and return attributes.
         """
 
+        # Type mismatch
         if type(gold) != type(pred):
 
             self.component_stats[path]["total"] += 1
@@ -467,6 +498,7 @@ class BenchmarkEvaluator:
             return
 
 
+        # Dictionary comparison
         if isinstance(gold, dict):
 
             all_keys = set(gold.keys()) | set(pred.keys())
@@ -494,16 +526,30 @@ class BenchmarkEvaluator:
                 )
 
 
+        # List comparison
         elif isinstance(gold, list):
 
+            # Normalize unordered lists
+            gold = self._normalize_list(path, gold)
+            pred = self._normalize_list(path, pred)
+
+
+            # Evaluate complete list component
+            self.component_stats[path]["total"] += 1
+
+            if gold == pred:
+
+                self.component_stats[path]["correct"] += 1
+
+
+            # Stop if sizes differ
             if len(gold) != len(pred):
 
-                self.component_stats[path]["total"] += 1
+                return
 
 
-            for i in range(
-                min(len(gold), len(pred))
-            ):
+            # Evaluate list elements
+            for i in range(len(gold)):
 
                 self._update_component_stats(
                     gold[i],
@@ -512,11 +558,13 @@ class BenchmarkEvaluator:
                 )
 
 
+        # Primitive comparison
         else:
 
             self.component_stats[path]["total"] += 1
 
             if gold == pred:
+
                 self.component_stats[path]["correct"] += 1
 
     # ============================================================
