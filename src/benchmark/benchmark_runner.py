@@ -235,9 +235,15 @@ def run_benchmark() -> dict:
 
             failed_examples += 1
 
-            print(
-                f"Benchmark failure: {exception}"
-            )
+            print()
+            print("=" * 60)
+            print("FAILED EXAMPLE")
+            print("=" * 60)
+            print(example["question"])
+            print()
+            print("ERROR:")
+            print(exception)
+            print("=" * 60)
 
 
             result = {
