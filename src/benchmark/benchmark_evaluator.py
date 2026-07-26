@@ -57,6 +57,9 @@ class BenchmarkEvaluator:
             }
         )
 
+    # ============================================================
+    # Schema normalization
+    # ============================================================
 
     def _normalize(self, obj):
         """
@@ -105,6 +108,9 @@ class BenchmarkEvaluator:
 
         return obj
 
+    # ============================================================
+    # Dataset loading
+    # ============================================================
 
     def load_jsonl(self, file_path):
         """
@@ -136,6 +142,9 @@ class BenchmarkEvaluator:
 
         return examples
 
+    # ============================================================
+    # Schema comparison
+    # ============================================================
 
     def compare(
         self,
@@ -257,6 +266,9 @@ class BenchmarkEvaluator:
 
         return errors
 
+    # ============================================================
+    # Example evaluation
+    # ============================================================
 
     def evaluate_example(
         self,
@@ -335,3 +347,270 @@ class BenchmarkEvaluator:
 
 
         return result
+
+    # ============================================================
+    # Field-level statistics
+    # ============================================================
+
+    def _count_leaf_fields(self, obj):
+        """
+        Count terminal values in a nested schema structure.
+
+        Used to estimate the number of comparable fields when
+        schemas have missing or incompatible structures.
+        """
+
+        if isinstance(obj, dict):
+            return sum(
+                self._count_leaf_fields(v)
+                for v in obj.values()
+            )
+
+        if isinstance(obj, list):
+            return sum(
+                self._count_leaf_fields(x)
+                for x in obj
+            )
+
+        return 1
+
+
+    def _update_field_stats(self, gold, pred):
+        """
+        Update field-level accuracy statistics.
+
+        Compares primitive schema values recursively and counts
+        matching fields against the total number of evaluated
+        fields.
+        """
+
+        if type(gold) != type(pred):
+
+            self.field_stats["total"] += (
+                self._count_leaf_fields(gold)
+            )
+
+            return
+
+
+        if isinstance(gold, dict):
+
+            all_keys = set(gold.keys()) | set(pred.keys())
+
+            for key in all_keys:
+
+                if key not in gold:
+
+                    self.field_stats["total"] += (
+                        self._count_leaf_fields(pred[key])
+                    )
+
+                    continue
+
+
+                if key not in pred:
+
+                    self.field_stats["total"] += (
+                        self._count_leaf_fields(gold[key])
+                    )
+
+                    continue
+
+
+                self._update_field_stats(
+                    gold[key],
+                    pred[key],
+                )
+
+
+        elif isinstance(gold, list):
+
+            for i in range(
+                min(len(gold), len(pred))
+            ):
+
+                self._update_field_stats(
+                    gold[i],
+                    pred[i],
+                )
+
+
+        else:
+
+            self.field_stats["total"] += 1
+
+            if gold == pred:
+                self.field_stats["correct"] += 1
+
+    # ============================================================
+    # Component-level statistics
+    # ============================================================
+
+    def _update_component_stats(
+        self,
+        gold,
+        pred,
+        path="",
+    ):
+        """
+        Update accuracy statistics for individual schema components.
+
+        Tracks correctness for each schema path, allowing detailed
+        error analysis such as filters, aggregations, ordering,
+        and return attributes.
+        """
+
+        if type(gold) != type(pred):
+
+            self.component_stats[path]["total"] += 1
+
+            return
+
+
+        if isinstance(gold, dict):
+
+            all_keys = set(gold.keys()) | set(pred.keys())
+
+            for key in all_keys:
+
+                new_path = (
+                    f"{path}.{key}"
+                    if path
+                    else key
+                )
+
+
+                if key not in gold or key not in pred:
+
+                    self.component_stats[new_path]["total"] += 1
+
+                    continue
+
+
+                self._update_component_stats(
+                    gold[key],
+                    pred[key],
+                    new_path,
+                )
+
+
+        elif isinstance(gold, list):
+
+            if len(gold) != len(pred):
+
+                self.component_stats[path]["total"] += 1
+
+
+            for i in range(
+                min(len(gold), len(pred))
+            ):
+
+                self._update_component_stats(
+                    gold[i],
+                    pred[i],
+                    f"{path}[{i}]",
+                )
+
+
+        else:
+
+            self.component_stats[path]["total"] += 1
+
+            if gold == pred:
+                self.component_stats[path]["correct"] += 1
+
+    # ============================================================
+    # Report generation
+    # ============================================================
+
+    def generate_report(self):
+        """
+        Generate aggregated benchmark evaluation metrics.
+
+        Returns
+        -------
+        dict
+            Benchmark report containing:
+            - regime accuracy
+            - exact schema match
+            - field accuracy
+            - component-level accuracy
+            - most frequent schema errors
+        """
+
+        total = self.stats["total"]
+
+
+        if total == 0:
+
+            return {
+                "total_examples": 0,
+                "regime_accuracy": 0.0,
+                "exact_schema_match": 0.0,
+                "field_accuracy": 0.0,
+                "component_accuracy": {},
+                "most_common_errors": [],
+            }
+
+
+        field_accuracy = (
+            round(
+                self.field_stats["correct"]
+                / self.field_stats["total"]
+                * 100,
+                2,
+            )
+            if self.field_stats["total"] > 0
+            else 0.0
+        )
+
+
+        component_accuracy = {}
+
+        for component, values in self.component_stats.items():
+
+            if values["total"] == 0:
+                continue
+
+
+            component_accuracy[component] = round(
+                values["correct"]
+                / values["total"]
+                * 100,
+                2,
+            )
+
+
+        most_common_errors = [
+            {
+                "path": key,
+                "count": value,
+            }
+            for key, value in sorted(
+                self.error_counter.items(),
+                key=lambda x: x[1],
+                reverse=True,
+            )[:20]
+        ]
+
+
+        return {
+            "total_examples": total,
+            "regime_accuracy": round(
+                self.stats["regime_correct"]
+                / total
+                * 100,
+                2,
+            ),
+            "exact_schema_match": round(
+                self.stats["exact_schema_match"]
+                / total
+                * 100,
+                2,
+            ),
+            "field_accuracy": field_accuracy,
+            "component_accuracy": dict(
+                sorted(component_accuracy.items())
+            ),
+            "most_common_errors": most_common_errors,
+        }
