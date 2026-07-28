@@ -251,7 +251,7 @@ def main() -> None:
     None
     """
     cfg = load_config(
-        Path(FINE_TUNING_CONFIG_DIR) / "training" / "qlora_config.yaml"
+        Path(FINE_TUNING_CONFIG_DIR) / "qlora_config.yaml"
         )
 
     # Stop token helps enforce deterministic JSON termination
