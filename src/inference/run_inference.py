@@ -10,7 +10,7 @@ The model is trained to:
 - Interpret a natural language question
 - Infer the user's intent
 - Produce a strictly valid JSON output containing:
-  - `user_intent`
+  - `regime`
   - `schema`
 
 Key Design Principles
@@ -48,7 +48,7 @@ from transformers import (
 )
 from peft import PeftModel
 
-from config.paths import FINE_TUNING_CONFIG_DIR
+from config.paths import INFERENCE_CONFIG_DIR
 
 
 # =================================================
@@ -61,7 +61,7 @@ from config.paths import FINE_TUNING_CONFIG_DIR
 # - Rapid experimentation
 # - Safe production deployment via config isolation
 
-CONFIG_PATH = Path(FINE_TUNING_CONFIG_DIR) / "inference" / "inference_config.yaml"
+CONFIG_PATH = Path(INFERENCE_CONFIG_DIR) / "inference_config.yaml"
 
 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
     cfg: Dict = yaml.safe_load(f)
@@ -138,7 +138,7 @@ base_model.resize_token_embeddings(len(tokenizer))
 # Load LoRA adapters
 # =================================================
 # Attach fine-tuned LoRA adapters responsible for
-# structured intent and schema generation.
+# structural regime and schema generation.
 
 model = PeftModel.from_pretrained(
     base_model,
@@ -253,7 +253,7 @@ def predict(
     Returns
     -------
     Dict
-        Dictionary containing `user_intent` and `schema`.
+        Dictionary containing `regime` and `schema`.
 
     Raises
     ------
@@ -301,7 +301,7 @@ def predict(
         parsed = json.loads(json_text)
 
         return {
-            "user_intent": parsed.get("user_intent"),
+            "regime": parsed.get("regime"),
             "schema": parsed.get("schema"),
         }
 
