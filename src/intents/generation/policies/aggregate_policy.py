@@ -1,7 +1,33 @@
 """
-Aggregate policy defining valid aggregation functions per attribute.
-Ensures semantic consistency for aggregate queries.
+Aggregation policy defining valid aggregatable attributes
+and supported aggregation functions.
+
+Ensures semantic consistency for aggregate query generation.
 """
+
+AGGREGATABLE_ATTRIBUTES = {
+
+    "Place": [
+        "rating",
+        "num_reviews",
+    ],
+
+    "Road": [
+        "length",
+        "maxspeed",
+    ],
+
+    "Neighborhood": [
+        "area_km2",
+        "average_monthly_income",
+        "literacy_rate",
+        "population_with_income",
+        "total_literate_population",
+        "total_private_households",
+        "total_resident_population",
+        "street_count",
+    ],
+}
 
 AGGREGATE_FUNCTIONS = {
 
