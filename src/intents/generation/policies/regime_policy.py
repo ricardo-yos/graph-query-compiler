@@ -38,33 +38,33 @@ REGIME_POLICY = {
     },
 
     "relational_lookup_query": {
-        "max_paths": 1800,
-        "max_projection_samples": 20,
-        "max_filter_combinations": 100,
+        "max_paths": 5000,
+        "max_projection_samples": 60,
+        "max_filter_combinations": 500,
         "max_order_attributes": 0,
         "max_limit_variants": 0,
     },
 
     "relational_count_query": {
-        "max_paths": 1600,
-        "max_projection_samples": 12,
-        "max_filter_combinations": 100,
+        "max_paths": 4500,
+        "max_projection_samples": 40,
+        "max_filter_combinations": 500,
         "max_order_attributes": 0,
         "max_limit_variants": 0,
     },
 
     "relational_aggregation_query": {
-        "max_paths": 2200,
-        "max_projection_samples": 20,
-        "max_filter_combinations": 120,
-        "max_order_attributes": 1,
+        "max_paths": 5000,
+        "max_projection_samples": 60,
+        "max_filter_combinations": 600,
+        "max_order_attributes": 2,
         "max_limit_variants": 0,
     },
 
     "relational_ranking_query": {
-        "max_paths": 350,
-        "max_projection_samples": 4,
-        "max_filter_combinations": 10,
+        "max_paths": 1200,
+        "max_projection_samples": 12,
+        "max_filter_combinations": 80,
         "max_order_attributes": 1,
         "max_limit_variants": 1,
     },
