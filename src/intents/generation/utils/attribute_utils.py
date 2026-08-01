@@ -2,8 +2,8 @@
 Attribute Utility Layer
 =======================
 
-Helper functions that expose semantic policies used by the
-structural intent generator.
+Utility functions that expose semantic policies used by the
+structural intent generation pipeline.
 
 This module abstracts policy dictionaries behind a stable API,
 ensuring the generator does not directly depend on policy structure.
@@ -26,7 +26,6 @@ from typing import Optional
 from ..intent_models import AttributeFilter
 
 from ..policies.operator_policy import NODE_ATTRIBUTE_OPERATORS
-from ..policies.aggregate_policy import AGGREGATE_FUNCTIONS
 from ..policies.order_policy import ORDERABLE_ATTRIBUTES
 from ..policies.return_policy import RETURN_POLICY
 from ..policies.filter_policy import (
@@ -34,8 +33,11 @@ from ..policies.filter_policy import (
     FILTER_VALUE_RANGES,
     MANDATORY_FILTERS,
 )
+from ..policies.aggregate_policy import (
+    AGGREGATABLE_ATTRIBUTES, 
+    AGGREGATE_FUNCTIONS,
+)
 from ..policies.numeric_policy import NUMERIC_ATTRIBUTES
-from ..policies.value_policy import VALUE_SAMPLES
 
 
 # --------------------------------------------------
@@ -69,6 +71,14 @@ def is_aggregatable(attribute: Optional[str]) -> bool:
     """
 
     return len(get_aggregate_functions(attribute)) > 0
+
+
+def get_aggregatable_attributes(label: str) -> list[str]:
+    """
+    Return aggregatable attributes for a node label.
+    """
+
+    return AGGREGATABLE_ATTRIBUTES.get(label, [])
 
 
 # --------------------------------------------------
@@ -253,7 +263,7 @@ def _safe_default_value(attribute: str, label: str):
 
 def is_numeric(attribute: str) -> bool:
     """
-    Check whether attribute is numeric.
+    Check whether an attribute supports numeric operations.
     """
 
     return attribute in NUMERIC_ATTRIBUTES
