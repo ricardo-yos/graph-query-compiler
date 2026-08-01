@@ -5,22 +5,15 @@ Filter policy defining which attributes can be used in filter clauses.
 FILTERABLE_ATTRIBUTES = {
 
     "Place": {
-        "name",
         "rating",
         "num_reviews",
         "type",
-        "latitude",
-        "longitude",
     },
 
     "Neighborhood": {
         "name",
         "area_km2",
         "average_monthly_income",
-        "literacy_rate",
-        "population_with_income",
-        "total_literate_population",
-        "total_private_households",
         "total_resident_population",
     },
 
@@ -53,12 +46,6 @@ FILTER_VALUE_RANGES = {
 
     "Neighborhood": {
 
-        "literacy_rate": {
-            "type": "range",
-            "min": 50,
-            "max": 100
-        },
-
         "average_monthly_income": {
             "type": "range",
             "min": 1000,
@@ -71,24 +58,14 @@ FILTER_VALUE_RANGES = {
             "max": 20
         },
 
-        "population_with_income": {
-            "type": "discrete",
-            "values": [1000, 3000, 5000, 10000, 50000]
-        },
-
         "total_resident_population": {
             "type": "discrete",
             "values": [5000, 10000, 20000, 50000]
         },
 
-        "total_literate_population": {
-            "type": "discrete",
-            "values": [4000, 8000, 15000, 20000]
-        },
-
         "name": {
             "type": "categorical",
-            "values": ["Centro", "Pinheiros", "Moema"]
+            "values": ["Centro", "Jardim Paulista", "Vila Mariana", "Moema", "Pinheiros"]
         },
     },
 
@@ -107,7 +84,7 @@ FILTER_VALUE_RANGES = {
 
         "name": {
             "type": "categorical",
-            "values": ["Pet Shop Centro", "Clínica Vet", "Banho e Tosa"]
+            "values": ["Pet Shop Amigo Fiel", "Clínica Veterinária São Francisco", "Pet Care Center", "Mundo Pet", "Casa do Pet"]
         },
 
         "type": {
@@ -131,7 +108,7 @@ FILTER_VALUE_RANGES = {
 
         "name": {
             "type": "categorical",
-            "values": ["Rua A", "Avenida B"]
+            "values": ["Rua das Flores", "Avenida Paulista", "Rua Augusta", "Rua da Consolação"]
         },
     },
 
@@ -160,4 +137,46 @@ MANDATORY_FILTERS = {
 
     ]
 
+}
+
+
+"""
+Filter generation policy defining when optional filters
+should be generated.
+"""
+
+FILTER_GENERATION_POLICY = {
+
+    "simple_lookup_query": {
+        "allow_optional_filters": True,
+    },
+
+    "simple_count_query": {
+        "allow_optional_filters": True,
+    },
+
+    "simple_aggregation_query": {
+        "allow_optional_filters": True,
+    },
+
+    "simple_ranking_query": {
+        "allow_optional_filters": True,
+    },
+
+
+    "relational_lookup_query": {
+        "allow_optional_filters": True,
+    },
+
+    "relational_count_query": {
+        "allow_optional_filters": True,
+    },
+
+    "relational_aggregation_query": {
+        "allow_optional_filters": True,
+    },
+
+    "relational_ranking_query": {
+        "allow_optional_filters": True,
+    },
 }
