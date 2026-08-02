@@ -771,9 +771,9 @@ def validate_regime_path_consistency(intent: dict) -> bool:
 # Main validation entry point
 # --------------------------------------------------
 
-def is_valid_intent(intent: dict) -> bool:
+def get_validation_result(intent: dict) -> tuple[bool, str]:
     """
-    Run complete semantic validation pipeline for a structured intent.
+    Run semantic validation pipeline and return validation status.
 
     Sequentially validates:
     - intent metadata
@@ -793,35 +793,36 @@ def is_valid_intent(intent: dict) -> bool:
 
     Returns
     -------
-    bool
-        True if intent passes all validation stages.
+    tuple[bool, str]
+        Validation status and failure reason.
+        Returns ("valid") when all validation stages pass.
     """
 
     if not validate_intent_meta(intent):
-        return False
+        return False, "intent_meta"
 
     if not validate_target(intent):
-        return False
+        return False, "target"
 
     if not validate_return_attributes(intent):
-        return False
+        return False, "return_attributes"
 
     if not validate_filters(intent):
-        return False
+        return False, "filters"
 
     if not validate_order_by(intent):
-        return False
+        return False, "order_by"
 
     if not validate_limit(intent):
-        return False
+        return False, "limit"
 
     if not validate_path(intent):
-        return False
+        return False, "path"
 
     if not validate_aggregate(intent):
-        return False
+        return False, "aggregate"
 
     if not validate_regime_path_consistency(intent):
-        return False
+        return False, "regime_path"
 
-    return True
+    return True, "valid"
