@@ -1,48 +1,51 @@
 """
 Combinatorial Intent Generation Pipeline
-=======================================
+========================================
 
-Builds a structurally diverse dataset of graph query intents by
-systematically exploring combinations of paths, filters, projections
-and operators defined in a graph schema.
+Builds a structurally diverse dataset of graph query intents by exploring
+combinations of schema-defined paths, projections, filters, and operators.
 
 Generation strategy:
-- explore graph traversal paths with different depths
-- combine structural operators (filters, aggregation, ordering)
-- apply semantic validation rules
-- enforce diversity using semantic bucket balancing
+
+- explore traversal paths with different depths
+- combine structural operators
+- validate generated structures
+- enforce semantic diversity balancing
 
 Pipeline steps:
-1. Load global generation configuration
+
+1. Load generation configuration
 2. Load graph schema
-3. Generate intents under different structural regimes
-4. Validate structural and semantic correctness
-5. Apply semantic diversity balancing
-6. Export dataset in JSONL format
+3. Generate intents by structural regime
+4. Validate generated structures
+5. Apply semantic balancing
+6. Export dataset as JSONL
 
 Inputs:
+
 - combinatorial.yaml
-    global dataset generation policy
+    generation policies and expansion limits
 
 - regime_types.yaml
-    definitions of structural complexity regimes
+    structural regime definitions
 
 - graph_schema.json
-    entities, attributes and relations of the graph domain
+    graph entities, attributes, and relationships
 
-Outputs:
+Output:
+
 - structural_intents.jsonl
-    structured query intents ready for NL → query training
+    structured intents for NL → query training
 
 Purpose:
-Provide high structural coverage of possible graph queries,
-enabling robust training of semantic parsers or LLMs that map
-natural language questions into structured graph queries.
+
+Provide broad structural coverage for training models that map
+natural language questions into graph query representations.
 """
 
 import json
 import random
-from collections import defaultdict
+from collections import Counter, defaultdict
 import yaml
 
 from config.paths import SCHEMA_DATA_DIR, INTENTS_DATA_DIR, INTENTS_CONFIG_DIR
@@ -51,28 +54,29 @@ from src.intents.generation.structural_config import StructuralGenerationConfig
 from src.intents.generation.graph_schema_adapter import GraphSchemaAdapter
 from src.intents.generation.combinatorial_generator import CombinatorialStructuralGenerator
 
-from src.intents.validation.intent_validator import is_valid_intent
+from src.intents.validation.intent_validator import get_validation_result
 from src.intents.dataset_curation.semantic_bucket_selector import SemanticBucketSelector
 
 
-# ensures reproducibility of stochastic sampling
+# Ensure deterministic dataset generation.
 SEED = 42
 random.seed(SEED)
 
 
 def load_generation_config() -> StructuralGenerationConfig:
     """
-    Loads the global combinatorial generation configuration.
+    Load the global structural generation configuration.
 
-    The configuration defines:
-    - semantic diversity balancing policy
-    - limits on projections and filters
-    - constraints controlling combinatorial explosion
+    The configuration controls:
+
+    - diversity balancing
+    - projection and filter limits
+    - combinatorial expansion constraints
 
     Returns
     -------
     StructuralGenerationConfig
-        validated configuration object used by the generator
+        Validated configuration used by the generator.
     """
 
     config_path = INTENTS_CONFIG_DIR / "combinatorial.yaml"
@@ -90,21 +94,15 @@ def load_generation_config() -> StructuralGenerationConfig:
 
 def load_regime_types():
     """
-    Loads structural regimes defining query complexity patterns.
+    Load structural regimes defining query complexity patterns.
 
-    Each regime constrains which operators can be used
-    during intent generation.
-
-    Examples of constraints:
-    - maximum graph depth
-    - aggregation availability
-    - ordering availability
-    - filter multiplicity
+    Each regime controls which structural operators and constraints
+    are available during intent generation.
 
     Returns
     -------
     dict
-        mapping regime name → structural constraints
+        Mapping between regime names and generation constraints.
     """
 
     path = INTENTS_CONFIG_DIR / "regime_types.yaml"
@@ -122,18 +120,19 @@ def load_regime_types():
 
 def load_schema():
     """
-    Loads graph schema and converts it into an internal adapter.
+    Load graph schema and create the internal schema adapter.
 
-    The adapter provides a normalized interface for:
+    The adapter provides access to:
+
     - entities
     - attributes
     - relationships
-    - traversal paths
+    - traversal rules
 
     Returns
     -------
     GraphSchemaAdapter
-        abstraction used by the combinatorial generator
+        Schema interface consumed by the intent generator.
     """
 
     schema_path = SCHEMA_DATA_DIR / "graph_schema.json"
@@ -150,27 +149,26 @@ def load_schema():
 
 def build_config_from_regime(base_config, regime_name, regime):
     """
-    Creates a specialized generation config for a given regime.
+    Create a regime-specific generation configuration.
 
-    Each regime defines a structural complexity level,
-    allowing the generator to produce queries with different
-    compositional properties.
+    Each regime defines a different structural complexity level,
+    controlling available operators and expansion limits.
 
     Parameters
     ----------
     base_config : StructuralGenerationConfig
-        global configuration template
+        Base generation configuration.
 
     regime_name : str
-        label identifying the structural regime
+        Identifier of the structural regime.
 
     regime : dict
-        constraints defining the regime
+        Regime-specific constraints.
 
     Returns
     -------
     StructuralGenerationConfig
-        regime-specific configuration
+        Configuration customized for the selected regime.
     """
 
     cfg = base_config.model_copy(deep=True)
@@ -194,26 +192,23 @@ def build_config_from_regime(base_config, regime_name, regime):
 
 def generate_intents_by_regime(schema, base_config):
     """
-    Generate intents separately for each structural regime.
+    Generate intents across all configured structural regimes.
 
-    This ensures coverage across multiple levels of query complexity.
-
-    Examples of regimes
-    -------------------
-    - simple lookup
-    - multi-hop traversal
-    - analytical queries with aggregation
+    Each regime is generated independently to ensure coverage
+    of different query complexity patterns.
 
     Parameters
     ----------
     schema : GraphSchemaAdapter
+        Graph schema used during intent generation.
 
     base_config : StructuralGenerationConfig
+        Base configuration used to create regime-specific settings.
 
     Returns
     -------
     list
-        Generated intent objects.
+        Generated structural intent objects.
     """
 
     regimes = load_regime_types()
@@ -248,33 +243,31 @@ def generate_intents_by_regime(schema, base_config):
 
 def filter_valid_intents(intents):
     """
-    Removes structurally or semantically invalid intents.
+    Filter invalid generated intents using structural validation rules.
 
-    Validation ensures:
-    - schema compatibility
-    - semantic correctness
-    - allowed operator combinations
-    - logical coherence of filters and projections
-
-    Parameters
-    ----------
-    intents : list
-
-    Returns
-    -------
-    list
-        filtered valid intents
+    Validation failures are collected by reason and regime to help
+    identify generation bottlenecks.
     """
 
     valid_intents = []
 
     removed = 0
 
+    rejection_counter = Counter()
+
+    rejection_by_regime = defaultdict(Counter)
+
     for intent in intents:
 
         intent_dict = intent.model_dump()
 
-        if is_valid_intent(intent_dict):
+        valid, reason = get_validation_result(intent_dict)
+
+        if not valid and reason == "regime_path":
+            print("=" * 80)
+            print(intent.model_dump())
+
+        if valid:
 
             valid_intents.append(intent)
 
@@ -282,38 +275,57 @@ def filter_valid_intents(intents):
 
             removed += 1
 
+            rejection_counter[reason] += 1
+
+            regime = intent.intent.regime
+
+            rejection_by_regime[regime][reason] += 1
+
     print(f"Valid intents   : {len(valid_intents)}")
 
     print(f"Rejected intents: {removed}")
+
+    print("\nOverall rejection reasons:")
+
+    for reason, count in rejection_counter.most_common():
+
+        print(f"  {reason:<25} {count}")
+
+    print("\nRejections by regime:")
+
+    for regime, counter in rejection_by_regime.items():
+
+        print(f"\n{regime}")
+
+        for reason, count in counter.most_common():
+
+            print(f"  {reason:<25} {count}")
 
     return valid_intents
 
 
 def apply_semantic_balance_by_regime(intents, config, top_k_regimes=3):
     """
-    Applies semantic diversity balancing selectively to high-volume regimes.
+    Apply semantic diversity balancing to high-volume regimes.
 
-    Prevents the dataset from being dominated by repetitive
-    structural patterns.
-
-    Strategy:
-    - group intents by regime
-    - identify regimes with largest volume
-    - apply bucket-based sampling only to these regimes
+    The strategy reduces repetitive structural patterns by applying
+    bucket-based sampling only where generation volume is highest.
 
     Parameters
     ----------
     intents : list
+        Generated structural intents.
 
     config : StructuralGenerationConfig
+        Generation configuration containing balancing rules.
 
     top_k_regimes : int
-        number of regimes where balancing will be applied
+        Number of regimes selected for balancing.
 
     Returns
     -------
     list
-        semantically balanced intents
+        Semantically balanced intents.
     """
 
     if not config.enable_semantic_balance:
@@ -336,6 +348,7 @@ def apply_semantic_balance_by_regime(intents, config, top_k_regimes=3):
 
     )
 
+    # Select regimes with highest generation volume.
     regimes_to_balance = {
 
         name for name, _ in regimes_sorted[:top_k_regimes]
@@ -348,12 +361,14 @@ def apply_semantic_balance_by_regime(intents, config, top_k_regimes=3):
 
         print(" -", r)
 
+    # Apply semantic bucket selection to reduce structural repetition.
     selector = SemanticBucketSelector(config)
 
     final_intents = []
 
     for regime, group in grouped.items():
 
+        # Balance only selected high-volume regimes.
         if regime in regimes_to_balance:
 
             balanced = selector.select(group)
@@ -377,18 +392,15 @@ def apply_semantic_balance_by_regime(intents, config, top_k_regimes=3):
 
 def export_jsonl(intents):
     """
-    Saves dataset in JSONL format.
+    Export generated intents to JSONL format.
 
-    Each line represents one structured intent.
-
-    JSONL is efficient for:
-    - streaming training data
-    - large datasets
-    - incremental dataset updates
+    Each line contains one serialized structural intent,
+    enabling efficient streaming and incremental dataset usage.
 
     Parameters
     ----------
     intents : list
+        Intent objects to export.
     """
 
     output_path = INTENTS_DATA_DIR / "structural_intents.jsonl"
@@ -430,13 +442,23 @@ def print_kv(key, value):
 
 def main():
     """
-    Orchestrates the full structural dataset generation pipeline.
+    Execute the complete structural intent generation pipeline.
+
+    Pipeline stages:
+
+    - load configuration
+    - load graph schema
+    - generate intents
+    - validate structures
+    - balance semantic diversity
+    - export dataset
     """
 
     print_section("Structural Dataset Generation")
 
     print_subsection("Configuration")
 
+    # Load generation policies and expansion constraints.
     config = load_generation_config()
 
     print_kv("semantic_balance", config.enable_semantic_balance)
@@ -448,11 +470,13 @@ def main():
 
     print_subsection("Schema")
 
+    # Load graph structure used for intent generation.
     schema = load_schema()
 
 
     print_subsection("Intent Generation")
 
+    # Generate structural intents across all regimes.
     intents = generate_intents_by_regime(
         schema,
         config
@@ -461,24 +485,24 @@ def main():
 
     print_subsection("Validation")
 
+    # Remove structurally invalid intents.
     intents = filter_valid_intents(intents)
-
 
     print_subsection("Semantic Balance")
 
+    # Reduce repetitive patterns in high-volume regimes.
     intents = apply_semantic_balance_by_regime(
         intents,
         config,
         top_k_regimes=6
     )
 
-
     print_subsection("Export")
 
+    # Export final dataset for training usage.
     export_jsonl(intents)
 
-
-    print("\nDone.")
+    print("\nDone.") 
 
 
 if __name__ == "__main__":
