@@ -1,23 +1,29 @@
 """
-Aggregation Empty-Filter Paraphrase Generation
+Aggregation Empty Filter Paraphrase Generation
 ==============================================
 
 LLM-based dataset augmentation module for generating new natural
 language examples for aggregation queries without filters.
 
-The generator targets only aggregation query examples where:
+This module expands aggregation query coverage by generating
+semantically equivalent paraphrases while preserving the original
+structured query schema.
 
-    schema.filters == []
-
-Supported query regimes:
+Target Query Regimes
+--------------------
+The generator processes only:
 
 - simple_aggregation_query
 - relational_aggregation_query
 
+with:
+
+    schema.filters == []
+
 Purpose
 -------
 Increase dataset coverage for aggregation queries without explicit
-filter conditions by generating semantically equivalent paraphrases.
+filter conditions.
 
 Each generated example preserves exactly:
 
@@ -28,14 +34,13 @@ Each generated example preserves exactly:
 Generation Strategy
 -------------------
 For each eligible example, multiple paraphrases are generated using
-an LLM while keeping the original structured query schema unchanged.
+an LLM. The generated questions receive the same structural schema
+as the original example.
 
-Generated examples are inserted into the final dataset before the
-first occurrence of:
+The generated aggregation examples are stored separately and later
+merged into the complete question dataset before:
 
     simple_ranking_query
-
-to maintain dataset organization by query regime.
 
 Input
 -----
@@ -49,9 +54,9 @@ JSONL dataset containing:
 
 Output
 ------
-Expanded JSONL dataset containing:
-- original examples
-- generated aggregation examples without filters
+Generated JSONL dataset containing:
+- original aggregation examples
+- generated aggregation paraphrases
 - preserved schema metadata
 
 Dependencies
@@ -85,21 +90,27 @@ from config.paths import (
 # Environment
 # =========================================================
 
-# Load environment variables (API keys, configuration, etc.)
+# Load environment variables required by the application
+# (e.g., API keys and external service configuration)
 load_env()
+
 
 
 # =========================================================
 # Configuration
 # =========================================================
 
+# Path to YAML configuration file containing:
+# - model configuration
+# - prompt configuration
+# - dataset paths
 CONFIG_PATH = os.path.join(
     DATASETS_CONFIG_DIR,
     "paraphrase_config.yaml"
 )
 
 
-# Load YAML configuration
+# Load pipeline configuration
 with open(
     CONFIG_PATH,
     "r",
@@ -109,21 +120,26 @@ with open(
     cfg = yaml.safe_load(f)
 
 
-# Dataset files
+
+# Input dataset containing structured query examples
 INPUT_FILE = Path(
     cfg["input_file"]
 )
 
+
+# Output dataset containing aggregation paraphrases
 OUTPUT_FILE = Path(
-    cfg["output_file"]
+    "aggregation_empty_paraphrases.jsonl"
 )
 
+FINAL_OUTPUT_FILE = Path(
+    "questions_paraphrased.jsonl"
+)
 
-# Generated examples are inserted before this regime
 INSERT_BEFORE_REGIME = "simple_ranking_query"
 
 
-# Model configuration
+# LLM configuration
 MODEL_NAME = cfg["model_name"]
 
 TEMPERATURE = cfg["temperature"]
@@ -131,12 +147,13 @@ TEMPERATURE = cfg["temperature"]
 MAX_TOKENS = cfg["max_tokens"]
 
 
-# Number of paraphrases generated per question
+# Number of paraphrases generated per original question
 N_PARAPHRASES = 15
 
 
-# Delay between API calls
+# Delay between API calls to control request rate
 SLEEP_SECONDS = cfg["sleep_seconds"]
+
 
 
 # Prompt configuration
@@ -147,20 +164,22 @@ USER_INSTRUCTIONS = cfg[
 ]
 
 
-# Regimes eligible for augmentation
+
+# Only aggregation regimes without filters are augmented
 TARGET_REGIMES = {
     "simple_aggregation_query",
     "relational_aggregation_query",
 }
 
 
-# Groq client
+
+# Initialize Groq API client
 client = Groq()
 
 
 
 # =========================================================
-# Prompt generation
+# Prompt
 # =========================================================
 
 def build_prompt(
@@ -168,22 +187,18 @@ def build_prompt(
     regime: str,
 ):
     """
-    Build the user prompt sent to the language model.
+    Build the prompt sent to the LLM.
 
-    Parameters
-    ----------
-    question:
-        Original natural language question.
+    The prompt includes:
+    - query regime
+    - regime-specific instructions
+    - original question
 
-    regime:
-        Query regime associated with the example.
-
-    Returns
-    -------
-    str
-        Formatted prompt containing instructions and question.
+    The generated paraphrases must preserve the original
+    query meaning.
     """
 
+    # Retrieve instructions specific to the current regime
     instruction = USER_INSTRUCTIONS[
         regime
     ]
@@ -206,27 +221,20 @@ def extract_json_array(
     content: str
 ) -> List[str]:
     """
-    Extract a JSON list from the model response.
+    Extract the generated paraphrases from the LLM response.
 
-    The function first tries to parse the entire response.
-    If additional text exists, it searches for the first
-    JSON array block.
+    Handles responses where:
+    - the model returns a valid JSON array directly
+    - the JSON array is surrounded by additional text
 
-    Parameters
-    ----------
-    content:
-        Raw model response.
-
-    Returns
-    -------
-    list[str]
-        Generated paraphrases.
+    Returns:
+        List of generated paraphrase strings.
     """
 
     content = content.strip()
 
 
-    # Try direct JSON parsing
+    # Try parsing the complete response first
     try:
 
         result = json.loads(content)
@@ -241,7 +249,7 @@ def extract_json_array(
 
 
 
-    # Fallback: extract JSON array from text
+    # Fallback: locate JSON array boundaries
     start = content.find("[")
 
     end = content.rfind("]")
@@ -255,13 +263,13 @@ def extract_json_array(
 
 
     return json.loads(
-        content[start:end + 1]
+        content[start:end+1]
     )
 
 
 
 # =========================================================
-# Paraphrase generation
+# Generate paraphrases
 # =========================================================
 
 def generate_paraphrases(
@@ -269,31 +277,25 @@ def generate_paraphrases(
     regime: str,
 ):
     """
-    Generate paraphrases for a single question.
+    Generate semantic paraphrases for a single aggregation query.
 
-    The schema is not modified here. Only the natural
-    language question is generated.
+    Only the natural language question is generated.
+    The original structured schema is preserved during
+    dataset creation.
 
-    Parameters
-    ----------
-    question:
-        Original question.
-
-    regime:
-        Query regime.
-
-    Returns
-    -------
-    list[str]
-        Generated paraphrases.
+    Returns:
+        List of paraphrased questions.
     """
 
     response = client.chat.completions.create(
 
+        # LLM model used for paraphrase generation
         model=MODEL_NAME,
 
+        # Controls randomness of generated paraphrases
         temperature=TEMPERATURE,
 
+        # Maximum response size
         max_tokens=MAX_TOKENS,
 
         messages=[
@@ -315,6 +317,7 @@ def generate_paraphrases(
     )
 
 
+    # Convert model response into a Python list
     return extract_json_array(
         response
         .choices[0]
@@ -325,64 +328,67 @@ def generate_paraphrases(
 
 
 # =========================================================
-# Dataset filtering
+# Filter
 # =========================================================
 
 def should_process(
     sample
 ):
     """
-    Check whether a dataset sample should receive augmentation.
+    Determine whether a dataset example should be augmented.
 
-    Only aggregation queries without filters are selected.
+    An example is selected only when:
 
-    Parameters
-    ----------
-    sample:
-        Dataset example.
+    - its regime is an aggregation regime
+    - schema.filters is empty
 
-    Returns
-    -------
-    bool
-        True when the sample should be processed.
+    This module specifically targets aggregation examples
+    without explicit filter constraints.
     """
 
+
+    # Ignore non-aggregation regimes
     if sample["regime"] not in TARGET_REGIMES:
 
         return False
 
 
+    # Retrieve filters from schema
     filters = sample["schema"].get(
         "filters",
         []
     )
 
 
+    # Only process examples without filters
     return filters == []
 
 
 
 # =========================================================
-# Dataset generation
+# Dataset processing
 # =========================================================
 
 def process_dataset():
     """
-    Generate paraphrases and create the final augmented dataset.
+    Generate aggregation paraphrases and save augmentation data.
 
     Workflow:
 
-    1. Load the original dataset.
-    2. Generate paraphrases for eligible aggregation examples.
-    3. Insert generated examples before simple_ranking_query.
-    4. Preserve all original examples.
-    5. Save the final JSONL file.
+    1. Read the structured query dataset.
+    2. Select aggregation examples without filters.
+    3. Generate paraphrases using the LLM.
+    4. Preserve the original schema for generated examples.
+    5. Save original and generated examples as JSONL.
     """
 
+
+    # Build complete input and output paths
     input_path = (
         BASE_DATASETS_DIR /
         INPUT_FILE
     )
+
 
     output_path = (
         AUGMENTED_DATASETS_DIR /
@@ -390,75 +396,170 @@ def process_dataset():
     )
 
 
-    # Load original dataset
+    # Counter for generated dataset size
+    total = 0
+
+
+
+    # Read input dataset and write augmented dataset
     with open(
         input_path,
         "r",
         encoding="utf-8"
-    ) as fin:
-
-        samples = [
-            json.loads(line)
-            for line in fin
-        ]
-
-
-    generated_samples = []
-
-
-    # -----------------------------------------------------
-    # Generate paraphrases
-    # -----------------------------------------------------
-
-    for sample in tqdm(samples):
-
-        if not should_process(sample):
-
-            continue
-
-
-        paraphrases = generate_paraphrases(
-            question=sample["question"],
-            regime=sample["regime"],
-        )
-
-
-        # Create new samples preserving schema
-        for text in paraphrases:
-
-            generated_samples.append(
-                {
-                    "question": text,
-                    "regime": sample["regime"],
-                    "schema": sample["schema"],
-                }
-            )
-
-
-        time.sleep(
-            SLEEP_SECONDS
-        )
-
-
-
-    # -----------------------------------------------------
-    # Write final dataset
-    # -----------------------------------------------------
-
-    inserted = False
-
-
-    with open(
+    ) as fin, open(
         output_path,
         "w",
         encoding="utf-8"
     ) as fout:
 
 
-        for sample in samples:
+        # Process each JSONL example
+        for line in tqdm(fin):
 
 
-            # Insert generated block before ranking regime
+            sample = json.loads(line)
+
+
+            # Skip examples outside augmentation criteria
+            if not should_process(sample):
+
+                continue
+
+
+
+            # Generate semantic variations
+            paraphrases = generate_paraphrases(
+
+                question=sample["question"],
+
+                regime=sample["regime"],
+
+            )
+
+
+
+            # Save original example
+            # The schema remains unchanged
+            fout.write(
+                json.dumps(
+                    sample,
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+            total += 1
+
+
+
+            # Save generated questions while preserving the original schema
+            for text in paraphrases:
+
+
+                # Create new example preserving
+                # regime and schema
+                new_sample = {
+
+                    "question": text,
+
+                    "regime": sample["regime"],
+
+                    "schema": sample["schema"],
+
+                }
+
+
+                fout.write(
+
+                    json.dumps(
+                        new_sample,
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+
+                )
+
+
+                total += 1
+
+
+
+            # Avoid exceeding API rate limits
+            time.sleep(
+                SLEEP_SECONDS
+            )
+
+
+
+    print(
+        f"Generated samples: {total}"
+    )
+
+
+def merge_paraphrases_before_regime():
+    """
+    Merge generated aggregation paraphrases into the final dataset.
+
+    The generated examples are inserted before the first occurrence
+    of simple_ranking_query to preserve the organization of query
+    regimes in the dataset.
+
+    Output:
+        questions_paraphrased.jsonl
+    """
+
+    base_path = (
+        BASE_DATASETS_DIR /
+        INPUT_FILE
+    )
+
+    paraphrase_path = (
+        AUGMENTED_DATASETS_DIR /
+        OUTPUT_FILE
+    )
+
+    final_path = (
+        AUGMENTED_DATASETS_DIR /
+        FINAL_OUTPUT_FILE
+    )
+
+
+    # Load augmentation examples generated from aggregation queries
+    # without filters
+    with open(
+        paraphrase_path,
+        "r",
+        encoding="utf-8"
+    ) as f:
+
+        generated_samples = [
+            json.loads(line)
+            for line in f
+        ]
+
+
+    inserted = False
+
+
+    # Create final dataset
+    with open(
+        base_path,
+        "r",
+        encoding="utf-8"
+    ) as fin, open(
+        final_path,
+        "w",
+        encoding="utf-8"
+    ) as fout:
+
+
+        for line in fin:
+
+            sample = json.loads(line)
+
+
+            # Insert aggregation augmentation examples before ranking regime
+            # to preserve dataset regime ordering
             if (
                 not inserted
                 and sample["regime"] == INSERT_BEFORE_REGIME
@@ -478,7 +579,7 @@ def process_dataset():
                 inserted = True
 
 
-            # Keep original dataset sample
+            # Write original example
             fout.write(
                 json.dumps(
                     sample,
@@ -488,17 +589,11 @@ def process_dataset():
             )
 
 
-
-    # -----------------------------------------------------
-    # Fallback
-    # -----------------------------------------------------
-
-    # If simple_ranking_query does not exist,
-    # append generated examples at the end.
+    # Fallback if ranking regime was not found
     if not inserted:
 
         with open(
-            output_path,
+            final_path,
             "a",
             encoding="utf-8"
         ) as fout:
@@ -515,13 +610,8 @@ def process_dataset():
 
 
     print(
-        f"Generated samples: {len(generated_samples)}"
+        f"Saved merged dataset: {final_path}"
     )
-
-    print(
-        f"Saved: {output_path}"
-    )
-
 
 
 # =========================================================
@@ -531,3 +621,5 @@ def process_dataset():
 if __name__ == "__main__":
 
     process_dataset()
+
+    merge_paraphrases_before_regime()
