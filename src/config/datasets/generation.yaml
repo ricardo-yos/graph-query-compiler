@@ -20,4 +20,4 @@ generation:
   model: llama-3.1-8b-instant
   temperature: 0.0
   batch_size: 2
-  sleep_seconds: 2
+  sleep_seconds: 5
