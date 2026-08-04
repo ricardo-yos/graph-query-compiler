@@ -1,0 +1,17 @@
+model_path: models/gguf/gqc-q4_k_m.gguf
+
+max_new_tokens: 1024
+
+stop_token: "</json>"
+
+answer_marker: "### Answer:"
+
+task_instruction: >
+  Given a natural language question, predict the user's query regime and return a JSON query schema.
+  The JSON structure MUST be exactly as specified.
+  Include both "regime" and "schema" in the output.
+  Return ONLY valid JSON. Do not explain.
+
+n_ctx: 4096
+n_threads: 8
+n_gpu_layers: -1
