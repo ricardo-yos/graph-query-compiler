@@ -1271,3 +1271,135 @@ rating >= 4
 This represents a fine-grained operator semantic error, where the model correctly identifies the filtering attribute but fails to preserve the exact comparison condition.
 
 These analyses provide insights beyond aggregate metrics by revealing specific limitations in schema generation and guiding future improvements in dataset construction and model adaptation.
+
+## 10. Experimental Results
+
+This section presents the experimental results of GQC v1 on the Structured Intent Generation Benchmark.
+
+The evaluation measures the ability of the fine-tuned language model to generate schema-constrained structured query intents from natural language questions.
+
+The benchmark contains 200 examples covering the supported simple query regimes:
+
+- simple_lookup_query;
+- simple_count_query;
+- simple_aggregation_query;
+- simple_ranking_query.
+
+The evaluation considers both complete schema correctness and individual component accuracy.
+
+### 10.1 Overall Performance
+
+The final evaluation results are:
+
+| Metric | Score |
+|---|---:|
+| Regime Accuracy | 95.50% |
+| Exact Schema Match | 66.50% |
+| Field Accuracy | 97.19% |
+
+The model achieves a high Regime Accuracy, indicating that it successfully identifies the structural query operation requested by the user.
+
+The Field Accuracy result shows that most individual schema fields are correctly generated. However, the lower Exact Schema Match indicates that some predictions still contain localized errors that prevent the complete JSON representation from matching the expected schema.
+
+This difference highlights the difficulty of structured generation tasks, where a single incorrect field can cause the entire schema prediction to fail.
+
+### 10.2 Component-Level Analysis
+
+Component-level evaluation provides a detailed view of model behavior.
+
+The results show strong performance across most schema components:
+
+| Component | Accuracy |
+|---|---:|
+| Target Label | 100.00% |
+| Path | 100.00% |
+| Aggregate Attribute | 100.00% |
+| Aggregate Function | 100.00% |
+| Limit | 98.50% |
+| Filters | 80.50% |
+| Return Attributes | 86.50% |
+| Order By | 97.33% |
+
+The model demonstrates strong capability in identifying the main structural elements of the query.
+
+The target entity and relationship structure achieve perfect accuracy, indicating that the model correctly understands the graph schema representation.
+
+Aggregation-related components also achieve perfect accuracy, suggesting that the model learned the supported aggregation patterns effectively.
+
+The main sources of errors are concentrated in filters, ordering, and returned attributes.
+
+### 10.3 Error Analysis
+
+The error analysis reveals that most failures are not caused by incorrect query interpretation, but by fine-grained schema generation errors.
+
+#### Filter Errors
+
+Filters represent the main source of component-level errors, achieving 80.50% accuracy.
+
+Although filter attributes are predicted with high accuracy:
+
+- filter attributes: 98.77%;
+- node labels: 100.00%;
+- operators: 98.15%;
+
+some errors occur in filter values, especially for more complex combinations of constraints.
+
+Examples include:
+
+```text
+Expected:
+
+rating > 4
+
+Predicted:
+
+rating > 5
+```
+
+or:
+
+```text
+Expected:
+
+num_reviews >= 100
+
+Predicted:
+
+num_reviews >= 10
+```
+
+These errors indicate that the model generally understands the filtering intent but may fail to reproduce exact values.
+
+#### Ordering Errors
+
+Ordering components achieve 97.33% accuracy overall.
+
+However, ordering attributes and directions show lower performance:
+
+- order_by.attribute: 86.00%;
+- order_by.direction: 88.00%.
+
+These errors are mainly associated with ranking queries, where the model must correctly identify both the ordering field and whether the operation requires ascending or descending order.
+
+#### Return Attribute Errors
+
+Return attributes achieve 86.50% accuracy.
+
+Although individual returned attributes are correctly generated when present, some errors occur in determining the exact set of attributes required by the query.
+
+This suggests that selecting the output projection remains a more challenging task than identifying the query structure itself.
+
+### 10.4 Discussion
+
+The results demonstrate that GQC v1 successfully learns the mapping between natural language questions and schema-constrained query intents.
+
+The high Regime Accuracy and Field Accuracy indicate that the model captures the semantic structure of supported queries.
+
+The remaining gap between Field Accuracy (97.19%) and Exact Schema Match (66.50%) shows that future improvements should focus on reducing localized schema errors rather than improving general query understanding.
+
+Potential improvements include:
+
+- increasing diversity of generated training examples;
+- improving representation of difficult filter combinations;
+- refining ranking and projection examples;
+- expanding benchmark coverage in future versions.
