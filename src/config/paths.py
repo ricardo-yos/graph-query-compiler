@@ -2,21 +2,22 @@
 Project Paths Configuration
 ===========================
 
-Centralizes all filesystem paths used across the Graph Query Compiler project.
+Centralized filesystem path definitions for the Graph Query Compiler.
 
-This module acts as a single source of truth for directory and file locations,
-providing:
+This module provides a single source of truth for project directories,
+avoiding hardcoded paths across the codebase.
 
-- Consistent path management across all modules
-- Elimination of hardcoded paths
-- Easier refactoring and portability
-- Clear and explicit project structure
+Responsibilities:
+- define root project location
+- organize dataset, model, source, and test directories
+- provide shared paths for configuration files
+- simplify portability and future refactoring
 
-All paths are defined using `pathlib.Path` to ensure cross-platform
-compatibility and improved readability.
+All paths use pathlib.Path for consistent and cross-platform
+filesystem handling.
 
-These constants are used by dataset pipelines, model training,
-inference, configuration loading, and the query compiler.
+These constants are consumed by dataset generation, benchmark
+evaluation, model training, inference, and query compilation modules.
 """
 
 from pathlib import Path
@@ -26,8 +27,7 @@ from pathlib import Path
 # Root directory
 # =============================================================================
 
-# Absolute path to the project root directory.
-# Computed relative to this file to ensure portability.
+# Project root directory resolved from the current module location.
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
@@ -35,35 +35,48 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 # Top-level directories
 # =============================================================================
 
-DATA_DIR = ROOT_DIR / "data"        # Stores datasets, schema, and reports
-MODELS_DIR = ROOT_DIR / "models"    # Stores trained models and adapters
-SRC_DIR = ROOT_DIR / "src"          # Source code root
-TESTS_DIR = ROOT_DIR / "tests"      # Test suite
+# Main project directories.
+DATA_DIR = ROOT_DIR / "data"
+MODELS_DIR = ROOT_DIR / "models"
+SRC_DIR = ROOT_DIR / "src"
 
 
 # =============================================================================
 # Data subdirectories
 # =============================================================================
 
-DATASETS_DATA_DIR = DATA_DIR / "datasets"   # Training and evaluation datasets
-INTENTS_DATA_DIR = DATA_DIR / "intents"     # Generated intent datasets
-REPORTS_DIR = DATA_DIR / "reports"          # Generated reports and analytics
-SCHEMA_DATA_DIR = DATA_DIR / "schema"       # Graph schema definitions
+# Dataset storage, generated intents, schemas, and reports.
+BENCHMARK_DATA_DIR = DATA_DIR / "benchmark"
+DATASETS_DATA_DIR = DATA_DIR / "datasets"
+INTENTS_DATA_DIR = DATA_DIR / "intents"
+REPORTS_DIR = DATA_DIR / "reports"
+SCHEMA_DATA_DIR = DATA_DIR / "schema"
+
+
+# =============================================================================
+# Benchmark structure
+# =============================================================================
+
+# Benchmark examples and evaluation reports.
+BENCHMARK_EXAMPLES_DIR = BENCHMARK_DATA_DIR / "benchmark_breakdown"
+BENCHMARK_REPORTS_DIR = BENCHMARK_DATA_DIR / "reports"
 
 
 # =============================================================================
 # Dataset structure
 # =============================================================================
 
-BASE_DATASETS_DIR = DATASETS_DATA_DIR / "base"     # Raw/base datasets
-SPLITS_DATASETS_DIR = DATASETS_DATA_DIR / "splits" # Train/validation/test splits
+# Dataset organization by generation stage.
+AUGMENTED_DATASETS_DIR = DATASETS_DATA_DIR / "augmented"
+BASE_DATASETS_DIR = DATASETS_DATA_DIR / "base"
+SPLITS_DATASETS_DIR = DATASETS_DATA_DIR / "splits"
 
 
 # =============================================================================
 # Model storage
 # =============================================================================
 
-# Directory for the fine-tuned LoRA adapter
+# Directory containing the trained QLoRA adapter.
 LORA_ADAPTER_DIR = MODELS_DIR / "qlora-intent-model"
 
 
@@ -71,14 +84,17 @@ LORA_ADAPTER_DIR = MODELS_DIR / "qlora-intent-model"
 # Configuration directories
 # =============================================================================
 
-CONFIG_DIR = SRC_DIR / "config"                      # Root config directory
-DATASETS_CONFIG_DIR = CONFIG_DIR / "datasets"        # Dataset configs
-INTENTS_CONFIG_DIR = CONFIG_DIR / "intents"          # Intent configs
-FINE_TUNING_CONFIG_DIR = CONFIG_DIR / "fine_tuning"  # Training/inference configs
+# Configuration files grouped by project component.
+CONFIG_DIR = SRC_DIR / "config"
+DATASETS_CONFIG_DIR = CONFIG_DIR / "datasets"
+INTENTS_CONFIG_DIR = CONFIG_DIR / "intents"
+FINE_TUNING_CONFIG_DIR = CONFIG_DIR / "fine_tuning"
+INFERENCE_CONFIG_DIR = CONFIG_DIR / "inference"
 
 
 # =============================================================================
 # Environment configuration
 # =============================================================================
 
-ENV_PATH = ROOT_DIR / ".env"  # Environment variables file
+# Environment variables file.
+ENV_PATH = ROOT_DIR / ".env"
