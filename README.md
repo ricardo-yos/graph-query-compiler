@@ -231,6 +231,8 @@ python -m src.intents.dataset.build_structural_dataset
 
 python -m src.datasets.generation.distilabel_pipeline
 
+python -m src.datasets.augmentation.aggregation_empty_filter_paraphrases
+
 python -m src.datasets.splitting.structural_split
 ```
 
