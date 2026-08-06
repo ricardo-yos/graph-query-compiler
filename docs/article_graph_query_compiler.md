@@ -1293,15 +1293,17 @@ The final evaluation results are:
 
 | Metric | Score |
 |---|---:|
-| Regime Accuracy | 95.50% |
-| Exact Schema Match | 66.50% |
-| Field Accuracy | 97.19% |
+| Regime Accuracy | 98.50% |
+| Exact Schema Match | 63.00% |
+| Field Accuracy | 96.05% |
 
 The model achieves a high Regime Accuracy, indicating that it successfully identifies the structural query operation requested by the user.
 
 The Field Accuracy result shows that most individual schema fields are correctly generated. However, the lower Exact Schema Match indicates that some predictions still contain localized errors that prevent the complete JSON representation from matching the expected schema.
 
-This difference highlights the difficulty of structured generation tasks, where a single incorrect field can cause the entire schema prediction to fail.
+This difference highlights the difficulty of structured generation tasks, where small errors in individual components can cause the entire schema prediction to be considered incorrect.
+
+---
 
 ### 10.2 Component-Level Analysis
 
@@ -1316,33 +1318,35 @@ The results show strong performance across most schema components:
 | Aggregate Attribute | 100.00% |
 | Aggregate Function | 100.00% |
 | Limit | 98.50% |
-| Filters | 80.50% |
-| Return Attributes | 86.50% |
-| Order By | 97.33% |
+| Order By | 96.00% |
+| Return Attributes | 90.50% |
+| Filters | 74.50% |
 
 The model demonstrates strong capability in identifying the main structural elements of the query.
 
 The target entity and relationship structure achieve perfect accuracy, indicating that the model correctly understands the graph schema representation.
 
-Aggregation-related components also achieve perfect accuracy, suggesting that the model learned the supported aggregation patterns effectively.
+Aggregation-related components also achieve very high performance, with both aggregation attributes and functions reaching 100% accuracy.
 
-The main sources of errors are concentrated in filters, ordering, and returned attributes.
+The main sources of errors are concentrated in filter generation, ordering constraints, and returned attribute selection.
+
+---
 
 ### 10.3 Error Analysis
 
-The error analysis reveals that most failures are not caused by incorrect query interpretation, but by fine-grained schema generation errors.
+The error analysis reveals that most failures are not caused by incorrect high-level query interpretation, but by fine-grained schema generation errors.
 
 #### Filter Errors
 
-Filters represent the main source of component-level errors, achieving 80.50% accuracy.
+Filters represent the main source of component-level errors, achieving 74.50% accuracy.
 
-Although filter attributes are predicted with high accuracy:
+Although individual filter components are predicted with high accuracy:
 
-- filter attributes: 98.77%;
+- filter attributes: 99.34%;
 - node labels: 100.00%;
-- operators: 98.15%;
+- operators: 98.03%;
 
-some errors occur in filter values, especially for more complex combinations of constraints.
+some errors occur when generating complete filter structures, especially in multi-filter scenarios and exact value reproduction.
 
 Examples include:
 
@@ -1356,7 +1360,7 @@ Predicted:
 rating > 5
 ```
 
-or:
+or: 
 
 ```text
 Expected:
@@ -1368,38 +1372,41 @@ Predicted:
 num_reviews >= 10
 ```
 
-These errors indicate that the model generally understands the filtering intent but may fail to reproduce exact values.
+These errors indicate that the model generally understands the filtering concept but may fail to preserve exact filter constraints.
 
 #### Ordering Errors
 
-Ordering components achieve 97.33% accuracy overall.
+Ordering components achieve 96.00% accuracy overall.
 
-However, ordering attributes and directions show lower performance:
+However, the internal ordering fields show lower performance:
 
-- order_by.attribute: 86.00%;
-- order_by.direction: 88.00%.
+- order_by.attribute: 62.00%;
+- order_by.direction: 66.00%.
 
-These errors are mainly associated with ranking queries, where the model must correctly identify both the ordering field and whether the operation requires ascending or descending order.
+These errors are mainly associated with ranking queries, where the model must correctly identify both the attribute used for ordering and the required direction.
+
+Although the model recognizes that an ordering operation is required, selecting the exact ordering semantics remains challenging.
 
 #### Return Attribute Errors
 
-Return attributes achieve 86.50% accuracy.
+Return attributes achieve 90.50% accuracy.
 
-Although individual returned attributes are correctly generated when present, some errors occur in determining the exact set of attributes required by the query.
+The model correctly identifies individual returned attributes in most cases, but some errors occur when selecting the exact projection required by the query.
 
-This suggests that selecting the output projection remains a more challenging task than identifying the query structure itself.
+This suggests that output attribute selection remains a more challenging task compared with identifying the main query structure.
 
 ### 10.4 Discussion
 
 The results demonstrate that GQC v1 successfully learns the mapping between natural language questions and schema-constrained query intents.
 
-The high Regime Accuracy and Field Accuracy indicate that the model captures the semantic structure of supported queries.
+The high Regime Accuracy (98.50%) and Field Accuracy (96.05%) indicate that the model captures the semantic structure of supported queries.
 
-The remaining gap between Field Accuracy (97.19%) and Exact Schema Match (66.50%) shows that future improvements should focus on reducing localized schema errors rather than improving general query understanding.
+However, the gap between Field Accuracy and Exact Schema Match (63.00%) shows that improving structured generation requires reducing localized schema errors rather than improving general query understanding.
 
-Potential improvements include:
+The results suggest that future improvements should focus on:
 
-- increasing diversity of generated training examples;
-- improving representation of difficult filter combinations;
-- refining ranking and projection examples;
+- increasing diversity of examples containing complex filter combinations;
+- improving ranking query representation;
+- refining ordering attribute and direction generation;
+- improving projection selection;
 - expanding benchmark coverage in future versions.
