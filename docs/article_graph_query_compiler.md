@@ -2,13 +2,15 @@
 
 ## Abstract
 
-Generating reliable graph queries from natural language requires preserving both linguistic meaning and strict structural constraints. Large language models can produce fluent outputs, but they may generate structurally invalid or semantically inconsistent queries when operating without explicit control mechanisms.
+Generating reliable graph database queries from natural language requires not only understanding user intent but also producing representations that comply with strict structural constraints. Although large language models demonstrate strong language understanding capabilities, they may generate inconsistent or invalid query structures when schema constraints are not explicitly represented.
 
-This document presents the Graph Query Compiler (GQC) v1, an experimental framework for controlled natural language to graph query translation. The system separates structural query reasoning from linguistic realization by combining schema-driven intent generation, controlled dataset construction, model adaptation, semantic validation, and deterministic query compilation.
+This document presents the Graph Query Compiler (GQC) v1, a schema-driven framework for generating structured query intents from natural language questions. Instead of directly producing executable graph queries, GQC introduces an intermediate representation layer that separates semantic interpretation from query construction.
 
-A central aspect of GQC v1 is a structure-first pipeline, where the space of valid query structures is explicitly modeled before language generation. Structural regimes and field-level policies guide the generation process, while validation mechanisms enforce consistency between entities, attributes, operators, relationships, and query semantics.
+The proposed approach combines schema design, controlled dataset generation, model adaptation using parameter-efficient fine-tuning, and structured intent evaluation. Query regimes and field-level policies define the space of valid representations, enabling the generation of supervised examples aligned with graph schema constraints.
 
-The current version investigates the feasibility of schema-aware natural language interfaces for graph databases. Experimental analysis indicates that the approach supports more consistent structured representations, while also revealing remaining challenges related to linguistic generalization, relational reasoning, and semantic ambiguity.
+Experimental evaluation on the Structured Intent Generation Benchmark shows that GQC v1 achieves 98.5% Regime Accuracy, 96.05% Field Accuracy, and 63.0% Exact Schema Match on simple graph query patterns. The results demonstrate that the model successfully learns the high-level structure of user queries, while remaining challenges are concentrated in fine-grained schema generation, such as filter composition, ordering constraints, and output attribute selection.
+
+GQC v1 demonstrates the feasibility of schema-aware natural language interfaces for graph databases and provides a foundation for future improvements in structured query generation.
 
 ## 1. Introduction
 
